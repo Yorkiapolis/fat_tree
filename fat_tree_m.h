@@ -23,28 +23,31 @@
  * //
  * message FatTreeMsg
  * {
- *     //int someField;
- *     //string anotherField;
- *     //double arrayField1[];
- *     //double arrayField2[10];
+ *     //以下为head flit具有的信息
+ *     int vc_id; //virtual channel id
+ *     int flitCount;//如果为head flit，则该项记录包括head flit在内的flit个数
  *     int src_ppid; //源processor的physical id
  *     int dst_ppid; //目标processor的physical id
- *     int from_router_port; //记录从当前路由器的哪一个端口收到该msg，由上一个路由器计算出
- *     string anotherField;
+ * 
+ * 
+ *     //以下为每个flit都具有的信息
+ *     bool isHead;//判断是否为head flit
  *     int hopCount = 0;
- *     int vc_id; //virtual channel id
+ *     int from_router_port; //记录从当前路由器的哪一个端口收到该msg，由上一个路由器计算出
+ * 
  * }
  * </pre>
  */
 class FatTreeMsg : public ::omnetpp::cMessage
 {
   protected:
+    int vc_id;
+    int flitCount;
     int src_ppid;
     int dst_ppid;
-    int from_router_port;
-    ::omnetpp::opp_string anotherField;
+    bool isHead;
     int hopCount;
-    int vc_id;
+    int from_router_port;
 
   private:
     void copy(const FatTreeMsg& other);
@@ -63,18 +66,20 @@ class FatTreeMsg : public ::omnetpp::cMessage
     virtual void parsimUnpack(omnetpp::cCommBuffer *b);
 
     // field getter/setter methods
+    virtual int getVc_id() const;
+    virtual void setVc_id(int vc_id);
+    virtual int getFlitCount() const;
+    virtual void setFlitCount(int flitCount);
     virtual int getSrc_ppid() const;
     virtual void setSrc_ppid(int src_ppid);
     virtual int getDst_ppid() const;
     virtual void setDst_ppid(int dst_ppid);
-    virtual int getFrom_router_port() const;
-    virtual void setFrom_router_port(int from_router_port);
-    virtual const char * getAnotherField() const;
-    virtual void setAnotherField(const char * anotherField);
+    virtual bool getIsHead() const;
+    virtual void setIsHead(bool isHead);
     virtual int getHopCount() const;
     virtual void setHopCount(int hopCount);
-    virtual int getVc_id() const;
-    virtual void setVc_id(int vc_id);
+    virtual int getFrom_router_port() const;
+    virtual void setFrom_router_port(int from_router_port);
 };
 
 inline void doParsimPacking(omnetpp::cCommBuffer *b, const FatTreeMsg& obj) {obj.parsimPack(b);}

@@ -1,12 +1,12 @@
 #
-# OMNeT++/OMNEST Makefile for fattree
+# OMNeT++/OMNEST Makefile for fat_tree
 #
 # This file was generated with the command:
 #  opp_makemake -f --deep -O out
 #
 
 # Name of target to be created (-o option)
-TARGET = fattree$(EXE_SUFFIX)
+TARGET = fat_tree$(EXE_SUFFIX)
 
 # User interface (uncomment one) (-u option)
 USERIF_LIBS = $(ALL_ENV_LIBS) # that is, $(TKENV_LIBS) $(QTENV_LIBS) $(CMDENV_LIBS)
@@ -116,7 +116,7 @@ smheaders: $(SMFILES:.sm=_sm.h)
 clean:
 	$(qecho) Cleaning...
 	$(Q)-rm -rf $O
-	$(Q)-rm -f fattree fattree.exe libfattree.so libfattree.a libfattree.dll libfattree.dylib
+	$(Q)-rm -f fat_tree fat_tree.exe libfat_tree.so libfat_tree.a libfat_tree.dll libfat_tree.dylib
 	$(Q)-rm -f ./*_m.cc ./*_m.h ./*_sm.cc ./*_sm.h
 	$(Q)-rm -f results/*_m.cc results/*_m.h results/*_sm.cc results/*_sm.h
 

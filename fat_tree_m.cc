@@ -165,11 +165,13 @@ Register_Class(FatTreeMsg);
 
 FatTreeMsg::FatTreeMsg(const char *name, int kind) : ::omnetpp::cMessage(name,kind)
 {
+    this->vc_id = 0;
+    this->flitCount = 0;
     this->src_ppid = 0;
     this->dst_ppid = 0;
-    this->from_router_port = 0;
+    this->isHead = false;
     this->hopCount = 0;
-    this->vc_id = 0;
+    this->from_router_port = 0;
 }
 
 FatTreeMsg::FatTreeMsg(const FatTreeMsg& other) : ::omnetpp::cMessage(other)
@@ -191,34 +193,57 @@ FatTreeMsg& FatTreeMsg::operator=(const FatTreeMsg& other)
 
 void FatTreeMsg::copy(const FatTreeMsg& other)
 {
+    this->vc_id = other.vc_id;
+    this->flitCount = other.flitCount;
     this->src_ppid = other.src_ppid;
     this->dst_ppid = other.dst_ppid;
-    this->from_router_port = other.from_router_port;
-    this->anotherField = other.anotherField;
+    this->isHead = other.isHead;
     this->hopCount = other.hopCount;
-    this->vc_id = other.vc_id;
+    this->from_router_port = other.from_router_port;
 }
 
 void FatTreeMsg::parsimPack(omnetpp::cCommBuffer *b) const
 {
     ::omnetpp::cMessage::parsimPack(b);
+    doParsimPacking(b,this->vc_id);
+    doParsimPacking(b,this->flitCount);
     doParsimPacking(b,this->src_ppid);
     doParsimPacking(b,this->dst_ppid);
-    doParsimPacking(b,this->from_router_port);
-    doParsimPacking(b,this->anotherField);
+    doParsimPacking(b,this->isHead);
     doParsimPacking(b,this->hopCount);
-    doParsimPacking(b,this->vc_id);
+    doParsimPacking(b,this->from_router_port);
 }
 
 void FatTreeMsg::parsimUnpack(omnetpp::cCommBuffer *b)
 {
     ::omnetpp::cMessage::parsimUnpack(b);
+    doParsimUnpacking(b,this->vc_id);
+    doParsimUnpacking(b,this->flitCount);
     doParsimUnpacking(b,this->src_ppid);
     doParsimUnpacking(b,this->dst_ppid);
-    doParsimUnpacking(b,this->from_router_port);
-    doParsimUnpacking(b,this->anotherField);
+    doParsimUnpacking(b,this->isHead);
     doParsimUnpacking(b,this->hopCount);
-    doParsimUnpacking(b,this->vc_id);
+    doParsimUnpacking(b,this->from_router_port);
+}
+
+int FatTreeMsg::getVc_id() const
+{
+    return this->vc_id;
+}
+
+void FatTreeMsg::setVc_id(int vc_id)
+{
+    this->vc_id = vc_id;
+}
+
+int FatTreeMsg::getFlitCount() const
+{
+    return this->flitCount;
+}
+
+void FatTreeMsg::setFlitCount(int flitCount)
+{
+    this->flitCount = flitCount;
 }
 
 int FatTreeMsg::getSrc_ppid() const
@@ -241,24 +266,14 @@ void FatTreeMsg::setDst_ppid(int dst_ppid)
     this->dst_ppid = dst_ppid;
 }
 
-int FatTreeMsg::getFrom_router_port() const
+bool FatTreeMsg::getIsHead() const
 {
-    return this->from_router_port;
+    return this->isHead;
 }
 
-void FatTreeMsg::setFrom_router_port(int from_router_port)
+void FatTreeMsg::setIsHead(bool isHead)
 {
-    this->from_router_port = from_router_port;
-}
-
-const char * FatTreeMsg::getAnotherField() const
-{
-    return this->anotherField.c_str();
-}
-
-void FatTreeMsg::setAnotherField(const char * anotherField)
-{
-    this->anotherField = anotherField;
+    this->isHead = isHead;
 }
 
 int FatTreeMsg::getHopCount() const
@@ -271,14 +286,14 @@ void FatTreeMsg::setHopCount(int hopCount)
     this->hopCount = hopCount;
 }
 
-int FatTreeMsg::getVc_id() const
+int FatTreeMsg::getFrom_router_port() const
 {
-    return this->vc_id;
+    return this->from_router_port;
 }
 
-void FatTreeMsg::setVc_id(int vc_id)
+void FatTreeMsg::setFrom_router_port(int from_router_port)
 {
-    this->vc_id = vc_id;
+    this->from_router_port = from_router_port;
 }
 
 class FatTreeMsgDescriptor : public omnetpp::cClassDescriptor
@@ -345,7 +360,7 @@ const char *FatTreeMsgDescriptor::getProperty(const char *propertyname) const
 int FatTreeMsgDescriptor::getFieldCount() const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
-    return basedesc ? 6+basedesc->getFieldCount() : 6;
+    return basedesc ? 7+basedesc->getFieldCount() : 7;
 }
 
 unsigned int FatTreeMsgDescriptor::getFieldTypeFlags(int field) const
@@ -363,8 +378,9 @@ unsigned int FatTreeMsgDescriptor::getFieldTypeFlags(int field) const
         FD_ISEDITABLE,
         FD_ISEDITABLE,
         FD_ISEDITABLE,
+        FD_ISEDITABLE,
     };
-    return (field>=0 && field<6) ? fieldTypeFlags[field] : 0;
+    return (field>=0 && field<7) ? fieldTypeFlags[field] : 0;
 }
 
 const char *FatTreeMsgDescriptor::getFieldName(int field) const
@@ -376,26 +392,28 @@ const char *FatTreeMsgDescriptor::getFieldName(int field) const
         field -= basedesc->getFieldCount();
     }
     static const char *fieldNames[] = {
+        "vc_id",
+        "flitCount",
         "src_ppid",
         "dst_ppid",
-        "from_router_port",
-        "anotherField",
+        "isHead",
         "hopCount",
-        "vc_id",
+        "from_router_port",
     };
-    return (field>=0 && field<6) ? fieldNames[field] : nullptr;
+    return (field>=0 && field<7) ? fieldNames[field] : nullptr;
 }
 
 int FatTreeMsgDescriptor::findField(const char *fieldName) const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
     int base = basedesc ? basedesc->getFieldCount() : 0;
-    if (fieldName[0]=='s' && strcmp(fieldName, "src_ppid")==0) return base+0;
-    if (fieldName[0]=='d' && strcmp(fieldName, "dst_ppid")==0) return base+1;
-    if (fieldName[0]=='f' && strcmp(fieldName, "from_router_port")==0) return base+2;
-    if (fieldName[0]=='a' && strcmp(fieldName, "anotherField")==0) return base+3;
-    if (fieldName[0]=='h' && strcmp(fieldName, "hopCount")==0) return base+4;
-    if (fieldName[0]=='v' && strcmp(fieldName, "vc_id")==0) return base+5;
+    if (fieldName[0]=='v' && strcmp(fieldName, "vc_id")==0) return base+0;
+    if (fieldName[0]=='f' && strcmp(fieldName, "flitCount")==0) return base+1;
+    if (fieldName[0]=='s' && strcmp(fieldName, "src_ppid")==0) return base+2;
+    if (fieldName[0]=='d' && strcmp(fieldName, "dst_ppid")==0) return base+3;
+    if (fieldName[0]=='i' && strcmp(fieldName, "isHead")==0) return base+4;
+    if (fieldName[0]=='h' && strcmp(fieldName, "hopCount")==0) return base+5;
+    if (fieldName[0]=='f' && strcmp(fieldName, "from_router_port")==0) return base+6;
     return basedesc ? basedesc->findField(fieldName) : -1;
 }
 
@@ -411,11 +429,12 @@ const char *FatTreeMsgDescriptor::getFieldTypeString(int field) const
         "int",
         "int",
         "int",
-        "string",
+        "int",
+        "bool",
         "int",
         "int",
     };
-    return (field>=0 && field<6) ? fieldTypeStrings[field] : nullptr;
+    return (field>=0 && field<7) ? fieldTypeStrings[field] : nullptr;
 }
 
 const char **FatTreeMsgDescriptor::getFieldPropertyNames(int field) const
@@ -468,12 +487,13 @@ std::string FatTreeMsgDescriptor::getFieldValueAsString(void *object, int field,
     }
     FatTreeMsg *pp = (FatTreeMsg *)object; (void)pp;
     switch (field) {
-        case 0: return long2string(pp->getSrc_ppid());
-        case 1: return long2string(pp->getDst_ppid());
-        case 2: return long2string(pp->getFrom_router_port());
-        case 3: return oppstring2string(pp->getAnotherField());
-        case 4: return long2string(pp->getHopCount());
-        case 5: return long2string(pp->getVc_id());
+        case 0: return long2string(pp->getVc_id());
+        case 1: return long2string(pp->getFlitCount());
+        case 2: return long2string(pp->getSrc_ppid());
+        case 3: return long2string(pp->getDst_ppid());
+        case 4: return bool2string(pp->getIsHead());
+        case 5: return long2string(pp->getHopCount());
+        case 6: return long2string(pp->getFrom_router_port());
         default: return "";
     }
 }
@@ -488,12 +508,13 @@ bool FatTreeMsgDescriptor::setFieldValueAsString(void *object, int field, int i,
     }
     FatTreeMsg *pp = (FatTreeMsg *)object; (void)pp;
     switch (field) {
-        case 0: pp->setSrc_ppid(string2long(value)); return true;
-        case 1: pp->setDst_ppid(string2long(value)); return true;
-        case 2: pp->setFrom_router_port(string2long(value)); return true;
-        case 3: pp->setAnotherField((value)); return true;
-        case 4: pp->setHopCount(string2long(value)); return true;
-        case 5: pp->setVc_id(string2long(value)); return true;
+        case 0: pp->setVc_id(string2long(value)); return true;
+        case 1: pp->setFlitCount(string2long(value)); return true;
+        case 2: pp->setSrc_ppid(string2long(value)); return true;
+        case 3: pp->setDst_ppid(string2long(value)); return true;
+        case 4: pp->setIsHead(string2bool(value)); return true;
+        case 5: pp->setHopCount(string2long(value)); return true;
+        case 6: pp->setFrom_router_port(string2long(value)); return true;
         default: return false;
     }
 }
