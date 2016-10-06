@@ -44,7 +44,7 @@ network Fat_tree
     types:
         channel Channel extends ned.DelayChannel
         {
-            delay = 100ms;
+            delay = 10ms;
         }
 	submodules:
         router[20]: Router {

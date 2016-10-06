@@ -35,6 +35,7 @@ class Processor : public cSimpleModule
 
     long numSent;
     long numReceived;
+    long numDropped;
     cLongHistogram hopCountStats;
     cOutVector hopCountVector;
 
@@ -81,9 +82,11 @@ void Processor::initialize()
     // Initialize variables
     numSent = 0;
     numReceived = 0;
+    numDropped = 0;
     //初始化行和列的参数
     WATCH(numSent);
     WATCH(numReceived);
+    WATCH(numDropped);
 
     hopCountStats.setName("hopCountStats");
     hopCountStats.setRangeAutoUpper(0, 10, 1.5);
@@ -124,7 +127,7 @@ void Processor::handleMessage(cMessage *msg)
         if(msg==selfMsgGenMsg){
             if(getIndex()==0){ //processor产生msg的模式,需要改进
 
-                //**********************产生flit*********************************
+                //**********************产生flit*****************************
                 if(FlitCir == 0 && OutBuffer[0] == nullptr){ //要产生新的head flit，同时buffer又有空间来存储剩余的body flit
 
                     EV << "<<<<<<<<<<Processor: "<<getIndex()<<"("<<ppid2plid(getIndex())<<") is generating Head Flit>>>>>>>>>>\n";
@@ -132,9 +135,9 @@ void Processor::handleMessage(cMessage *msg)
                     EV << newmsg << endl;
                     preHeadFlitVCID = newmsg->getVc_id();
                     OutBuffer[0] = newmsg;
-                    FlitCir++;
+                    FlitCir = (FlitCir+1) % FlitLength;
 
-                }else if(FlitCir != 0 ){
+                }else if(FlitCir != 0 ){//产生body flit，buffer一定有空间
                     EV << "<<<<<<<<<<Processor: "<<getIndex()<<"("<<ppid2plid(getIndex())<<") is generating Body/Tail Flit>>>>>>>>>>\n";
                     FatTreeMsg *newmsg = generateMessage(false, FlitCir); // Body or Tail Flit
                     EV << newmsg << endl;
@@ -145,6 +148,10 @@ void Processor::handleMessage(cMessage *msg)
                         }
                     }
                     FlitCir = (FlitCir+1) % FlitLength;
+
+
+                }else{//要产生新的package，但是buffer空间不够，drop掉该package
+                    numDropped++;
 
                 }
 
@@ -185,7 +192,6 @@ void Processor::handleMessage(cMessage *msg)
                         OutBuffer[i] = OutBuffer[i+1];
                     }
                     OutBuffer[FlitLength-1] = nullptr;
-
                 }
 
 
@@ -193,12 +199,29 @@ void Processor::handleMessage(cMessage *msg)
                 //simtime_t sendNext = par("sendNext");
                 //scheduleAt(simTime()+0.1, msg);
 
-                scheduleAt(simTime()+CLK_CYCLE,selfMsgGenMsg);
+                //package之间的时间间隔为泊松分布或自相似分布，同一个package的flit之间间隔为CLK_CYCLE
+                if(FlitCir == 0){
+                    double exp_time = exponential((double)1/LAMBDA);
+                    exp_time = round(exp_time*ROUND)/ROUND;
+                    //if (Verbose >= VERBOSE_BUFFER_INFO_MESSAGES) {
+                        EV << "Poisson interval: "<<exp_time<<"\n";
+                    //}
+
+                    scheduleAt(simTime()+exp_time,selfMsgGenMsg);
+
+                }else{
+                    scheduleAt(simTime()+CLK_CYCLE,selfMsgGenMsg);
+                }
+
+
+
+
 
 
 
 
             }
+
         }else{
             //******************更新buffer信息定时**********************
             scheduleAt(simTime()+Buffer_Info_Update_Interval,selfMsgBufferInfoP);
@@ -425,6 +448,7 @@ void Processor::finish()
     // This function is called by OMNeT++ at the end of the simulation.
     EV << "Sent:     " << numSent << endl;
     EV << "Received: " << numReceived << endl;
+    EV << "Dropped:  " << numDropped << endl;
     EV << "Hop count, min:    " << hopCountStats.getMin() << endl;
     EV << "Hop count, max:    " << hopCountStats.getMax() << endl;
     EV << "Hop count, mean:   " << hopCountStats.getMean() << endl;
@@ -432,6 +456,8 @@ void Processor::finish()
 
     recordScalar("#sent", numSent);
     recordScalar("#received", numReceived);
+    recordScalar("#dropped", numDropped);
+
 
     hopCountStats.recordAs("hop count");
 }
