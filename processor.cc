@@ -3,6 +3,12 @@
  *
  *  Created on: 2016年7月30日
  *      Author: Vincent
+ *
+ *  Function:
+ *      Flit模式：Head Flit和Body Flit
+ *      时间分布：自相似(FlitLength不定长)，泊松(FlitLength定长)
+ *      空间分布：均匀
+ *
  */
 
 
@@ -30,7 +36,8 @@ using namespace omnetpp;
 class Processor : public cSimpleModule
 {
   private:
-    cMessage *selfMsgGenMsg;
+    cMessage *selfMsgGenMsg;//产生flit定时，package产生按泊松分布或均匀分布
+    cMessage *selfMsgSendMsg;//发送flit定时，每周期都检查buffer，再发送
     cMessage *selfMsgBufferInfoP;//Processor的bufer更新定时信号，告诉与它相连的router，所有vc通道都为avail
 
     long numSent;
@@ -43,14 +50,15 @@ class Processor : public cSimpleModule
     bool BufferAvailConnectP[VC];//相连Processor端口的Router的buffer状态
 
     int FlitCir; //用来循环产生Head Flit和Body Flit
+    int curFlitLength; //不定长package的Flit长度
     int preHeadFlitVCID; //用来存放上一个产生的Head Flit的VCID，body flit不保存vcid
-    FatTreeMsg* OutBuffer[FlitLength]; //一个package的大小，用于存放flit，有可能产生body flit时，下个router的buffer已满，因此需要缓冲一下
+    FatTreeMsg* OutBuffer[FixedFlitLength]; //一个package的大小，用于存放flit，有可能产生body flit时，下个router的buffer已满，因此需要缓冲一下
 
   public:
     Processor();
     virtual ~Processor();
   protected:
-    virtual FatTreeMsg *generateMessage(bool isHead, int count);
+    virtual FatTreeMsg *generateMessage(bool isHead, int flitCount);
     virtual void forwardMessage(FatTreeMsg *msg);
     virtual void forwardBufferInfoMsgP(BufferInfoMsg *msg);
     virtual void initialize() override;
@@ -58,6 +66,9 @@ class Processor : public cSimpleModule
     virtual int ppid2plid(int ppid);
     virtual int plid2ppid(int plid);
     virtual int getNextRouterPortP(); //计算与processor相连的router的端口
+    virtual double ParetoON();
+    virtual double ParetoOFF();
+    virtual double Poisson();
 
 
     // The finish() function is called by OMNeT++ at the end of the simulation:
@@ -68,12 +79,14 @@ Define_Module(Processor);
 
 Processor::Processor(){
     selfMsgGenMsg=nullptr;
+    selfMsgSendMsg=nullptr;
     selfMsgBufferInfoP=nullptr;
 }
 
 
 Processor::~Processor(){
     cancelAndDelete(selfMsgGenMsg);
+    cancelAndDelete(selfMsgSendMsg);
     cancelAndDelete(selfMsgBufferInfoP);
 }
 
@@ -92,6 +105,8 @@ void Processor::initialize()
     hopCountStats.setRangeAutoUpper(0, 10, 1.5);
     hopCountVector.setName("HopCount");
 
+    selfMsgSendMsg = new cMessage("selfMsgSendMsg");//注意顺序，先发送buffer里面的msg，再产生新的msg，这样一个flit需要2个周期才会发出去
+    scheduleAt(Sim_Start_Time, selfMsgSendMsg);
     selfMsgGenMsg = new cMessage("selfMsgGenMsg");
     scheduleAt(Sim_Start_Time, selfMsgGenMsg);
     selfMsgBufferInfoP = new cMessage("selfMsgBufferInfoP");
@@ -103,8 +118,10 @@ void Processor::initialize()
     }
 
     FlitCir = 0; //从0开始循环
+    curFlitLength = FixedFlitLength;
+    preHeadFlitVCID = 0;
 
-    for(int i=0;i<FlitLength;i++)
+    for(int i=0;i<FixedFlitLength;i++)
         OutBuffer[i]=nullptr;
 
 
@@ -124,30 +141,56 @@ void Processor::handleMessage(cMessage *msg)
 {
     if (msg->isSelfMessage()) {
         //********************发送新数据的自定时消息********************
-        if(msg==selfMsgGenMsg){
-            if(getIndex()==0){ //processor产生msg的模式,需要改进
+        if(msg == selfMsgSendMsg){
+            //****************************转发flit**************************
+            if(OutBuffer[0] != nullptr && BufferAvailConnectP[preHeadFlitVCID] == true){ //下一个节点有buffer接受此flit
+                FatTreeMsg* current_forward_msg = OutBuffer[0];
+                forwardMessage(current_forward_msg);
+                numSent++;
+                for(int i=0;i<FixedFlitLength-1;i++){
+                    OutBuffer[i] = OutBuffer[i+1];
+                }
+                OutBuffer[FixedFlitLength-1] = nullptr;
+            }
+            scheduleAt(simTime()+CLK_CYCLE,selfMsgSendMsg);
+
+        }else if(msg == selfMsgGenMsg){
+
+            if(getIndex() == 0){ //processor产生msg的模式,需要改进
 
                 //**********************产生flit*****************************
                 if(FlitCir == 0 && OutBuffer[0] == nullptr){ //要产生新的head flit，同时buffer又有空间来存储剩余的body flit
 
+#ifdef SELF_SIMILARITY
+                    double onTime = ParetoON();
+                    curFlitLength = onTime / CLK_CYCLE;
+                    if (curFlitLength == 0) {
+                        curFlitLength = 1;
+                    }else if (curFlitLength > FixedFlitLength) {
+                        curFlitLength = FixedFlitLength;
+                    }
+#else
+                    curFlitLength = FixedFlitLength;
+#endif
+
                     EV << "<<<<<<<<<<Processor: "<<getIndex()<<"("<<ppid2plid(getIndex())<<") is generating Head Flit>>>>>>>>>>\n";
-                    FatTreeMsg *newmsg = generateMessage(true, FlitCir); //Head Flit
+                    FatTreeMsg *newmsg = generateMessage(true, curFlitLength); //Head Flit
                     EV << newmsg << endl;
                     preHeadFlitVCID = newmsg->getVc_id();
                     OutBuffer[0] = newmsg;
-                    FlitCir = (FlitCir+1) % FlitLength;
+                    FlitCir = (FlitCir+1) % curFlitLength;
 
                 }else if(FlitCir != 0 ){//产生body flit，buffer一定有空间
                     EV << "<<<<<<<<<<Processor: "<<getIndex()<<"("<<ppid2plid(getIndex())<<") is generating Body/Tail Flit>>>>>>>>>>\n";
-                    FatTreeMsg *newmsg = generateMessage(false, FlitCir); // Body or Tail Flit
+                    FatTreeMsg *newmsg = generateMessage(false, -1); // Body or Tail Flit
                     EV << newmsg << endl;
-                    for(int i=0;i<FlitLength;i++){
+                    for(int i=0;i<FixedFlitLength;i++){
                         if(OutBuffer[i] == nullptr){
                             OutBuffer[i] = newmsg;
                             break;
                         }
                     }
-                    FlitCir = (FlitCir+1) % FlitLength;
+                    FlitCir = (FlitCir+1) % curFlitLength;
 
 
                 }else{//要产生新的package，但是buffer空间不够，drop掉该package
@@ -183,16 +226,7 @@ void Processor::handleMessage(cMessage *msg)
 
                      }
                      */
-                //****************************转发flit**************************
-                if(OutBuffer[0] != nullptr && BufferAvailConnectP[preHeadFlitVCID] == true){ //下一个节点有buffer接受此flit
-                    FatTreeMsg* current_forward_msg = OutBuffer[0];
-                    forwardMessage(current_forward_msg);
-                    numSent++;
-                    for(int i=0;i<FlitLength-1;i++){
-                        OutBuffer[i] = OutBuffer[i+1];
-                    }
-                    OutBuffer[FlitLength-1] = nullptr;
-                }
+
 
 
                 //simtime_t delay = par("delayTime");
@@ -201,23 +235,30 @@ void Processor::handleMessage(cMessage *msg)
 
                 //package之间的时间间隔为泊松分布或自相似分布，同一个package的flit之间间隔为CLK_CYCLE
                 if(FlitCir == 0){
-                    double exp_time = exponential((double)1/LAMBDA);
-                    exp_time = round(exp_time*ROUND)/ROUND;
-                    //if (Verbose >= VERBOSE_BUFFER_INFO_MESSAGES) {
-                        EV << "Poisson interval: "<<exp_time<<"\n";
-                    //}
+#ifdef SELF_SIMILARITY //自相似分布
+                    double offTime = ParetoOFF();
 
-                    scheduleAt(simTime()+exp_time,selfMsgGenMsg);
+                    //if (Verbose >= VERBOSE_DETAIL_DEBUG_MESSAGES) {
+                        EV << "Self Similarity interval offTime: "<<offTime<<"\n";
+                    //}
+                    scheduleAt(simTime()+offTime,selfMsgGenMsg);
+
+#elif defined POISSON_DIST //泊松分布
+                    double expTime = Poisson();
+
+                    if (Verbose >= VERBOSE_DETAIL_DEBUG_MESSAGES) {
+                        EV << "Poisson interval: "<<expTime<<"\n";
+                    }
+
+                    scheduleAt(simTime()+expTime,selfMsgGenMsg);
+#else //均匀分布
+
+                    scheduleAt(simTime()+CLK_CYCLE,selfMsgGenMsg);
+#endif
 
                 }else{
                     scheduleAt(simTime()+CLK_CYCLE,selfMsgGenMsg);
                 }
-
-
-
-
-
-
 
 
             }
@@ -245,6 +286,7 @@ void Processor::handleMessage(cMessage *msg)
         }
 
     }else{
+        //************************非self message*********************
         //************************收到buffer更新消息******************
         if(strcmp("bufferInfoMsg", msg->getName()) == 0){
             //收到的消息为buffer状态消息，更新BufferAvailConnect[PortNum][VC]
@@ -324,25 +366,27 @@ void Processor::handleMessage(cMessage *msg)
     }
 }
 
-FatTreeMsg* Processor::generateMessage(bool isHead, int count)
+FatTreeMsg* Processor::generateMessage(bool isHead, int flitCount)
 {
 
     if(isHead){
         // Head Flit
 
-        // Produce source and destination addresse
+        // Produce source and destination address
         int current_ppid=getIndex();
         int n = getVectorSize();//processor的数量
         //EV<<n<<"\n";
+#ifdef UNIFORM //均匀分布
         int dst_ppid = intuniform(0, n-2); //均匀流量模型
         //EV<<dst_ppid<<"\n";
-        if (dst_ppid >= getIndex())
+        if (dst_ppid >= current_ppid)
             dst_ppid++;//保证不取到current_ppid
+#endif
 
         int vc_id = intuniform(0,VC-1); //随机分配vc通道, 根据下一跳router的vc buffer情况来选择合适的vcid
         for(int i=0;i<VC;i++){
-            if(BufferAvailConnectP[i] == true){
-                vc_id = i;
+            vc_id = (vc_id + i) % VC;
+            if(BufferAvailConnectP[vc_id] == true){
                 break;
             }
         }
@@ -353,7 +397,7 @@ FatTreeMsg* Processor::generateMessage(bool isHead, int count)
         int dst_plid=ppid2plid(dst_ppid);
 
         char msgname[200];//初始分配的空间太小导致数据被改变!!!!!!!
-        sprintf(msgname, "From processor node %d(%d) to node %d(%d), Head Flit No.%d", current_ppid,current_plid,dst_ppid,dst_plid,count);
+        sprintf(msgname, "Head Flit, From processor node %d(%d) to node %d(%d), Flit Length: %d", current_ppid,current_plid,dst_ppid,dst_plid,flitCount);
 
         // Create message object and set source and destination field.
         FatTreeMsg *msg = new FatTreeMsg(msgname);
@@ -362,11 +406,11 @@ FatTreeMsg* Processor::generateMessage(bool isHead, int count)
         msg->setFrom_router_port(getNextRouterPortP());//设置收到该msg的Router端口
         msg->setVc_id(vc_id);//设置VC ID
         msg->setIsHead(isHead); //设置isHead flag
-        msg->setFlitCount(FlitLength); // 设置Flit Count
+        msg->setFlitCount(flitCount); // 设置Flit Count
 
 
         if (Verbose >= VERBOSE_DETAIL_DEBUG_MESSAGES) {
-            EV<<"From Processor::generateMessage, flit count: "<<msg->getFlitCount()<<", FlitLength: "<<FlitLength<<"\n";
+            EV<<"From Processor::generateMessage, flit count: "<<msg->getFlitCount()<<", FlitLength: "<<flitCount<<"\n";
         }
         //EV<<current_ppid<<" "<<dst_ppid<<"\n";
         //EV<<msg->getSrc_ppid()<<" "<<msg->getDst_ppid()<<"\n";
@@ -383,6 +427,7 @@ FatTreeMsg* Processor::generateMessage(bool isHead, int count)
         msg->setFrom_router_port(getNextRouterPortP());//设置收到该msg的Router端口
         msg->setVc_id(-1);//设置VC ID
         msg->setIsHead(isHead); //设置isHead flag
+        msg->setFlitCount(-1);
 
         return msg;
 
@@ -443,6 +488,34 @@ int Processor::plid2ppid(int plid){
     }
     return IDtmp;
 }
+
+double Processor::ParetoON() {
+    double exp_time = exponential((double)1/ALPHA_ON);
+    exp_time = round(exp_time*ROUND)/ROUND;
+    if(exp_time < CLK_CYCLE) {
+        exp_time = CLK_CYCLE;
+    }
+    return exp_time;
+}
+
+double Processor::ParetoOFF() {
+    double exp_time = exponential((double)1/ALPHA_OFF);
+    exp_time = round(exp_time*ROUND)/ROUND;
+    if(exp_time < CLK_CYCLE) {
+        exp_time = CLK_CYCLE;
+    }
+    return exp_time;
+}
+
+double Processor::Poisson() {
+    double exp_time = exponential((double)1/LAMBDA);
+    exp_time = round(exp_time*ROUND)/ROUND;
+    if(exp_time < CLK_CYCLE) {
+        exp_time = CLK_CYCLE;
+    }
+    return exp_time;
+}
+
 void Processor::finish()
 {
     // This function is called by OMNeT++ at the end of the simulation.

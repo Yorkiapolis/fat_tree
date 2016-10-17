@@ -3,6 +3,10 @@
  *
  *  Created on: 2016年7月30日
  *      Author: Vincent
+ *
+ *  Function:
+ *      路由器：输入缓存，虚通道，虚通道仲裁(Round Robin)，交叉开关仲裁(Round Robin)，交叉开关传输
+ *      数据包：Flit形式，Flit长度可调(根据Head Flit决定)
  */
 
 
