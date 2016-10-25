@@ -30,5 +30,8 @@ message FatTreeMsg{
 	bool isHead;//判断是否为head flit
 	int hopCount = 0;
 	int from_router_port; //记录从当前路由器的哪一个端口收到该msg，由上一个路由器计算出
+	
+	long packageGenTime; //package的产生时间
+	long flitGenTime; //flit的产生时间
     
 }

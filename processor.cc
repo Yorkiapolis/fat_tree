@@ -40,11 +40,18 @@ class Processor : public cSimpleModule
     cMessage *selfMsgSendMsg;//发送flit定时，每周期都检查buffer，再发送
     cMessage *selfMsgBufferInfoP;//Processor的bufer更新定时信号，告诉与它相连的router，所有vc通道都为avail
 
-    long numSent;
-    long numReceived;
+    long numFlitSent;
+    long numPackageSent;
+    long numFlitReceived;
+    long numPackageReceived;
     long numDropped;
-    cLongHistogram hopCountStats;
+
+    long headFlitGenTime; //head flit的产生时间，同于计算package delay
+    int packageDelayCount; //对到达的package的flit进行计数
+    //cLongHistogram hopCountStats;
     cOutVector hopCountVector;
+    cOutVector flitDelayTime;
+    cOutVector packageDelayTime;
 
     bool BufferAvailCurrentP[VC];//当前Processor的buffer状态，默认都为available
     bool BufferAvailConnectP[VC];//相连Processor端口的Router的buffer状态
@@ -93,17 +100,21 @@ Processor::~Processor(){
 void Processor::initialize()
 {
     // Initialize variables
-    numSent = 0;
-    numReceived = 0;
+    numFlitSent = 0;
+    numPackageSent = 0;
+    numFlitReceived = 0;
+    numPackageReceived = 0;
     numDropped = 0;
     //初始化行和列的参数
-    WATCH(numSent);
-    WATCH(numReceived);
-    WATCH(numDropped);
+    //WATCH(numSent);
+    //WATCH(numReceived);
+    //WATCH(numDropped);
 
-    hopCountStats.setName("hopCountStats");
-    hopCountStats.setRangeAutoUpper(0, 10, 1.5);
+    //hopCountStats.setName("hopCountStats");
+    //hopCountStats.setRangeAutoUpper(0, 10, 1.5);
     hopCountVector.setName("HopCount");
+    flitDelayTime.setName("flitDelayTime");
+    packageDelayTime.setName("packageDelayTime");
 
     selfMsgSendMsg = new cMessage("selfMsgSendMsg");//注意顺序，先发送buffer里面的msg，再产生新的msg，这样一个flit需要2个周期才会发出去
     scheduleAt(Sim_Start_Time, selfMsgSendMsg);
@@ -146,7 +157,10 @@ void Processor::handleMessage(cMessage *msg)
             if(OutBuffer[0] != nullptr && BufferAvailConnectP[preHeadFlitVCID] == true){ //下一个节点有buffer接受此flit
                 FatTreeMsg* current_forward_msg = OutBuffer[0];
                 forwardMessage(current_forward_msg);
-                numSent++;
+                numFlitSent++;
+                if (current_forward_msg->getIsHead() == true) {
+                    numPackageSent++;
+                }
                 for(int i=0;i<FixedFlitLength-1;i++){
                     OutBuffer[i] = OutBuffer[i+1];
                 }
@@ -156,7 +170,8 @@ void Processor::handleMessage(cMessage *msg)
 
         }else if(msg == selfMsgGenMsg){
 
-            if(getIndex() == 0){ //processor产生msg的模式,需要改进
+            //if(getIndex() == 0){ //processor产生msg的模式,需要改进
+            if (true) {
 
                 //**********************产生flit*****************************
                 if(FlitCir == 0 && OutBuffer[0] == nullptr){ //要产生新的head flit，同时buffer又有空间来存储剩余的body flit
@@ -321,9 +336,20 @@ void Processor::handleMessage(cMessage *msg)
             //bubble("ARRIVED!");
 
             // update statistics.
-            numReceived++;
+            numFlitReceived++;
+            if (ftmsg->getIsHead() == true) {
+                packageDelayCount = ftmsg->getFlitCount();
+                headFlitGenTime = ftmsg->getPackageGenTime();
+
+            }
+            packageDelayCount--;
+            if (packageDelayCount == 0) {
+                packageDelayTime.record(simTime().dbl() - headFlitGenTime);
+                numPackageReceived++;
+            }
+            flitDelayTime.record(simTime().dbl() - ftmsg->getFlitGenTime());
             hopCountVector.record(hopcount);
-            hopCountStats.collect(hopcount);
+
 
             delete ftmsg;
 
@@ -407,6 +433,8 @@ FatTreeMsg* Processor::generateMessage(bool isHead, int flitCount)
         msg->setVc_id(vc_id);//设置VC ID
         msg->setIsHead(isHead); //设置isHead flag
         msg->setFlitCount(flitCount); // 设置Flit Count
+        msg->setPackageGenTime(simTime().dbl());
+        msg->setFlitGenTime(simTime().dbl());
 
 
         if (Verbose >= VERBOSE_DETAIL_DEBUG_MESSAGES) {
@@ -428,6 +456,7 @@ FatTreeMsg* Processor::generateMessage(bool isHead, int flitCount)
         msg->setVc_id(-1);//设置VC ID
         msg->setIsHead(isHead); //设置isHead flag
         msg->setFlitCount(-1);
+        msg->setFlitGenTime(simTime().dbl());
 
         return msg;
 
@@ -519,20 +548,29 @@ double Processor::Poisson() {
 void Processor::finish()
 {
     // This function is called by OMNeT++ at the end of the simulation.
-    EV << "Sent:     " << numSent << endl;
-    EV << "Received: " << numReceived << endl;
+    EV << "Flit Sent: " << numFlitSent << endl;
+    EV << "Package Sent: " << numPackageSent << endl;
+    EV << "Flit Received: " << numFlitReceived << endl;
+    EV << "Package Received: " << numPackageReceived << endl;
     EV << "Dropped:  " << numDropped << endl;
-    EV << "Hop count, min:    " << hopCountStats.getMin() << endl;
-    EV << "Hop count, max:    " << hopCountStats.getMax() << endl;
-    EV << "Hop count, mean:   " << hopCountStats.getMean() << endl;
-    EV << "Hop count, stddev: " << hopCountStats.getStddev() << endl;
+    //EV << "Hop count, min:    " << hopCountStats.getMin() << endl;
+    //EV << "Hop count, max:    " << hopCountStats.getMax() << endl;
+    //EV << "Hop count, mean:   " << hopCountStats.getMean() << endl;
+    //EV << "Hop count, stddev: " << hopCountStats.getStddev() << endl;
 
-    recordScalar("#sent", numSent);
-    recordScalar("#received", numReceived);
+    recordScalar("#flit sent", numFlitSent);
+    recordScalar("#package sent", numPackageSent);
+    recordScalar("#flit received", numFlitReceived);
+    recordScalar("#package received", numPackageReceived);
     recordScalar("#dropped", numDropped);
 
+    long timeCount = simTime().dbl() - Sim_Start_Time;
+    if(getIndex() == 0) {
+        recordScalar("#timeCount", timeCount);
+    }
 
-    hopCountStats.recordAs("hop count");
+
+
 }
 
 

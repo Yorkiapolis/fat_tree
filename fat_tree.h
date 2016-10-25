@@ -24,7 +24,7 @@
 #define Sim_Start_Time 1 //1s 开始仿真
 #define Buffer_Info_Sim_Start 0.98//比Sim_Start_Time提前0.05，同时考虑channel传输延迟0.1s，这个是Buffer更新信号的开始仿真时间
 
-#define FixedFlitLength 4 //一个package中最大flit的长度,也是processor中buffer的长度
+#define FixedFlitLength 4 //一个package中最大flit的长度,也是processor中buffer的长度,poisson分布为定长
 
 //Space Distribution
 #define UNIFORM //空间均匀分布
@@ -34,7 +34,7 @@
 #define POISSON_DIST //采用泊松分布
 
 //自相似分布Pareto参数
-#define ALPHA_ON 3
+#define ALPHA_ON 4
 #define ALPHA_OFF 2
 
 //Poisson分布参数

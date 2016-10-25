@@ -172,6 +172,8 @@ FatTreeMsg::FatTreeMsg(const char *name, int kind) : ::omnetpp::cMessage(name,ki
     this->isHead = false;
     this->hopCount = 0;
     this->from_router_port = 0;
+    this->packageGenTime = 0;
+    this->flitGenTime = 0;
 }
 
 FatTreeMsg::FatTreeMsg(const FatTreeMsg& other) : ::omnetpp::cMessage(other)
@@ -200,6 +202,8 @@ void FatTreeMsg::copy(const FatTreeMsg& other)
     this->isHead = other.isHead;
     this->hopCount = other.hopCount;
     this->from_router_port = other.from_router_port;
+    this->packageGenTime = other.packageGenTime;
+    this->flitGenTime = other.flitGenTime;
 }
 
 void FatTreeMsg::parsimPack(omnetpp::cCommBuffer *b) const
@@ -212,6 +216,8 @@ void FatTreeMsg::parsimPack(omnetpp::cCommBuffer *b) const
     doParsimPacking(b,this->isHead);
     doParsimPacking(b,this->hopCount);
     doParsimPacking(b,this->from_router_port);
+    doParsimPacking(b,this->packageGenTime);
+    doParsimPacking(b,this->flitGenTime);
 }
 
 void FatTreeMsg::parsimUnpack(omnetpp::cCommBuffer *b)
@@ -224,6 +230,8 @@ void FatTreeMsg::parsimUnpack(omnetpp::cCommBuffer *b)
     doParsimUnpacking(b,this->isHead);
     doParsimUnpacking(b,this->hopCount);
     doParsimUnpacking(b,this->from_router_port);
+    doParsimUnpacking(b,this->packageGenTime);
+    doParsimUnpacking(b,this->flitGenTime);
 }
 
 int FatTreeMsg::getVc_id() const
@@ -296,6 +304,26 @@ void FatTreeMsg::setFrom_router_port(int from_router_port)
     this->from_router_port = from_router_port;
 }
 
+long FatTreeMsg::getPackageGenTime() const
+{
+    return this->packageGenTime;
+}
+
+void FatTreeMsg::setPackageGenTime(long packageGenTime)
+{
+    this->packageGenTime = packageGenTime;
+}
+
+long FatTreeMsg::getFlitGenTime() const
+{
+    return this->flitGenTime;
+}
+
+void FatTreeMsg::setFlitGenTime(long flitGenTime)
+{
+    this->flitGenTime = flitGenTime;
+}
+
 class FatTreeMsgDescriptor : public omnetpp::cClassDescriptor
 {
   private:
@@ -360,7 +388,7 @@ const char *FatTreeMsgDescriptor::getProperty(const char *propertyname) const
 int FatTreeMsgDescriptor::getFieldCount() const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
-    return basedesc ? 7+basedesc->getFieldCount() : 7;
+    return basedesc ? 9+basedesc->getFieldCount() : 9;
 }
 
 unsigned int FatTreeMsgDescriptor::getFieldTypeFlags(int field) const
@@ -379,8 +407,10 @@ unsigned int FatTreeMsgDescriptor::getFieldTypeFlags(int field) const
         FD_ISEDITABLE,
         FD_ISEDITABLE,
         FD_ISEDITABLE,
+        FD_ISEDITABLE,
+        FD_ISEDITABLE,
     };
-    return (field>=0 && field<7) ? fieldTypeFlags[field] : 0;
+    return (field>=0 && field<9) ? fieldTypeFlags[field] : 0;
 }
 
 const char *FatTreeMsgDescriptor::getFieldName(int field) const
@@ -399,8 +429,10 @@ const char *FatTreeMsgDescriptor::getFieldName(int field) const
         "isHead",
         "hopCount",
         "from_router_port",
+        "packageGenTime",
+        "flitGenTime",
     };
-    return (field>=0 && field<7) ? fieldNames[field] : nullptr;
+    return (field>=0 && field<9) ? fieldNames[field] : nullptr;
 }
 
 int FatTreeMsgDescriptor::findField(const char *fieldName) const
@@ -414,6 +446,8 @@ int FatTreeMsgDescriptor::findField(const char *fieldName) const
     if (fieldName[0]=='i' && strcmp(fieldName, "isHead")==0) return base+4;
     if (fieldName[0]=='h' && strcmp(fieldName, "hopCount")==0) return base+5;
     if (fieldName[0]=='f' && strcmp(fieldName, "from_router_port")==0) return base+6;
+    if (fieldName[0]=='p' && strcmp(fieldName, "packageGenTime")==0) return base+7;
+    if (fieldName[0]=='f' && strcmp(fieldName, "flitGenTime")==0) return base+8;
     return basedesc ? basedesc->findField(fieldName) : -1;
 }
 
@@ -433,8 +467,10 @@ const char *FatTreeMsgDescriptor::getFieldTypeString(int field) const
         "bool",
         "int",
         "int",
+        "long",
+        "long",
     };
-    return (field>=0 && field<7) ? fieldTypeStrings[field] : nullptr;
+    return (field>=0 && field<9) ? fieldTypeStrings[field] : nullptr;
 }
 
 const char **FatTreeMsgDescriptor::getFieldPropertyNames(int field) const
@@ -494,6 +530,8 @@ std::string FatTreeMsgDescriptor::getFieldValueAsString(void *object, int field,
         case 4: return bool2string(pp->getIsHead());
         case 5: return long2string(pp->getHopCount());
         case 6: return long2string(pp->getFrom_router_port());
+        case 7: return long2string(pp->getPackageGenTime());
+        case 8: return long2string(pp->getFlitGenTime());
         default: return "";
     }
 }
@@ -515,6 +553,8 @@ bool FatTreeMsgDescriptor::setFieldValueAsString(void *object, int field, int i,
         case 4: pp->setIsHead(string2bool(value)); return true;
         case 5: pp->setHopCount(string2long(value)); return true;
         case 6: pp->setFrom_router_port(string2long(value)); return true;
+        case 7: pp->setPackageGenTime(string2long(value)); return true;
+        case 8: pp->setFlitGenTime(string2long(value)); return true;
         default: return false;
     }
 }

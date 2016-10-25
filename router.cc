@@ -56,8 +56,8 @@ class Router : public cSimpleModule
     cMessage *selfMsgAlloc;
     cMessage *selfMsgBufferInfo;
 
-    cLongHistogram hopCountStats;
-    cOutVector hopCountVector;
+    //cLongHistogram hopCountStats;
+    //cOutVector hopCountVector;
 
     //每个Port的buffer状态
     bool BufferAvailCurrent[PortNum][VC];//当前路由器的buffer状态
@@ -133,9 +133,9 @@ void Router::initialize()
     //WATCH(numSent);
     //WATCH(numReceived);
 
-    hopCountStats.setName("hopCountStats");
-    hopCountStats.setRangeAutoUpper(0, 10, 1.5);
-    hopCountVector.setName("HopCount");
+    //hopCountStats.setName("hopCountStats");
+    //hopCountStats.setRangeAutoUpper(0, 10, 1.5);
+    //hopCountVector.setName("HopCount");
 
     //对Buffer进行初始化
     for(int i=0;i<PortNum;i++)
@@ -649,14 +649,14 @@ void Router::finish()
     // This function is called by OMNeT++ at the end of the simulation.
     //EV << "Sent:     " << numSent << endl;
     //EV << "Received: " << numReceived << endl;
-    EV << "Hop count, min:    " << hopCountStats.getMin() << endl;
-    EV << "Hop count, max:    " << hopCountStats.getMax() << endl;
-    EV << "Hop count, mean:   " << hopCountStats.getMean() << endl;
-    EV << "Hop count, stddev: " << hopCountStats.getStddev() << endl;
+    //EV << "Hop count, min:    " << hopCountStats.getMin() << endl;
+    //EV << "Hop count, max:    " << hopCountStats.getMax() << endl;
+    //EV << "Hop count, mean:   " << hopCountStats.getMean() << endl;
+    //EV << "Hop count, stddev: " << hopCountStats.getStddev() << endl;
 
     //recordScalar("#sent", numSent);
     //recordScalar("#received", numReceived);
 
-    hopCountStats.recordAs("hop count");
+    //hopCountStats.recordAs("hop count");
 }
 

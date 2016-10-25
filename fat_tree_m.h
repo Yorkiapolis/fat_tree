@@ -35,6 +35,9 @@
  *     int hopCount = 0;
  *     int from_router_port; //记录从当前路由器的哪一个端口收到该msg，由上一个路由器计算出
  * 
+ *     long packageGenTime; //package的产生时间
+ *     long flitGenTime; //flit的产生时间
+ * 
  * }
  * </pre>
  */
@@ -48,6 +51,8 @@ class FatTreeMsg : public ::omnetpp::cMessage
     bool isHead;
     int hopCount;
     int from_router_port;
+    long packageGenTime;
+    long flitGenTime;
 
   private:
     void copy(const FatTreeMsg& other);
@@ -80,6 +85,10 @@ class FatTreeMsg : public ::omnetpp::cMessage
     virtual void setHopCount(int hopCount);
     virtual int getFrom_router_port() const;
     virtual void setFrom_router_port(int from_router_port);
+    virtual long getPackageGenTime() const;
+    virtual void setPackageGenTime(long packageGenTime);
+    virtual long getFlitGenTime() const;
+    virtual void setFlitGenTime(long flitGenTime);
 };
 
 inline void doParsimPacking(omnetpp::cCommBuffer *b, const FatTreeMsg& obj) {obj.parsimPack(b);}
