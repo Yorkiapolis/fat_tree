@@ -38,13 +38,15 @@ class Processor : public cSimpleModule
   private:
     cMessage *selfMsgGenMsg;//产生flit定时，package产生按泊松分布或均匀分布
     cMessage *selfMsgSendMsg;//发送flit定时，每周期都检查buffer，再发送
-    cMessage *selfMsgBufferInfoP;//Processor的bufer更新定时信号，告诉与它相连的router，所有vc通道都为avail
+    //cMessage *selfMsgBufferInfoP;//Processor的bufer更新定时信号，告诉与它相连的router，所有vc通道都为avail
 
     long numFlitSent;
     long numPackageSent;
     long numFlitReceived;
     long numPackageReceived;
     long numDropped;
+    long flitByHop; //用于计算链路利用率
+    bool dropFlag; //判断本轮是否drop过
 
     long headFlitGenTime; //head flit的产生时间，同于计算package delay
     int packageDelayCount; //对到达的package的flit进行计数
@@ -53,8 +55,9 @@ class Processor : public cSimpleModule
     cOutVector flitDelayTime;
     cOutVector packageDelayTime;
 
-    bool BufferAvailCurrentP[VC];//当前Processor的buffer状态，默认都为available
-    bool BufferAvailConnectP[VC];//相连Processor端口的Router的buffer状态
+    //bool BufferAvailCurrentP[VC];//当前Processor的buffer状态，默认都为available
+    //bool BufferAvailConnectP[VC];//相连Processor端口的Router的buffer状态
+    int BufferConnectCredit[VC]; //连接Processor端口的Router的buffer的credit
 
     int FlitCir; //用来循环产生Head Flit和Body Flit
     int curFlitLength; //不定长package的Flit长度
@@ -87,14 +90,14 @@ Define_Module(Processor);
 Processor::Processor(){
     selfMsgGenMsg=nullptr;
     selfMsgSendMsg=nullptr;
-    selfMsgBufferInfoP=nullptr;
+    //selfMsgBufferInfoP=nullptr;
 }
 
 
 Processor::~Processor(){
     cancelAndDelete(selfMsgGenMsg);
     cancelAndDelete(selfMsgSendMsg);
-    cancelAndDelete(selfMsgBufferInfoP);
+    //cancelAndDelete(selfMsgBufferInfoP);
 }
 
 void Processor::initialize()
@@ -105,6 +108,7 @@ void Processor::initialize()
     numFlitReceived = 0;
     numPackageReceived = 0;
     numDropped = 0;
+    flitByHop = 0;
     //初始化行和列的参数
     //WATCH(numSent);
     //WATCH(numReceived);
@@ -120,12 +124,18 @@ void Processor::initialize()
     scheduleAt(Sim_Start_Time, selfMsgSendMsg);
     selfMsgGenMsg = new cMessage("selfMsgGenMsg");
     scheduleAt(Sim_Start_Time, selfMsgGenMsg);
-    selfMsgBufferInfoP = new cMessage("selfMsgBufferInfoP");
-    scheduleAt(Buffer_Info_Sim_Start, selfMsgBufferInfoP);
+    //selfMsgBufferInfoP = new cMessage("selfMsgBufferInfoP");
+    //scheduleAt(Buffer_Info_Sim_Start, selfMsgBufferInfoP);
 
+    /*
     for(int i=0;i<VC;i++){
         BufferAvailCurrentP[i]=true;
         BufferAvailConnectP[i]=false;
+    }
+    */
+
+    for (int i = 0; i < VC; i++) {
+        BufferConnectCredit[i] = BufferDepth; //初始化与它相连的router的buffer都为空
     }
 
     FlitCir = 0; //从0开始循环
@@ -134,6 +144,8 @@ void Processor::initialize()
 
     for(int i=0;i<FixedFlitLength;i++)
         OutBuffer[i]=nullptr;
+
+    dropFlag = false;
 
 
     // Module 0 sends the first message
@@ -154,9 +166,11 @@ void Processor::handleMessage(cMessage *msg)
         //********************发送新数据的自定时消息********************
         if(msg == selfMsgSendMsg){
             //****************************转发flit**************************
-            if(OutBuffer[0] != nullptr && BufferAvailConnectP[preHeadFlitVCID] == true){ //下一个节点有buffer接受此flit
+            if(OutBuffer[0] != nullptr && BufferConnectCredit[preHeadFlitVCID] != 0){ //下一个节点有buffer接受此flit
                 FatTreeMsg* current_forward_msg = OutBuffer[0];
                 forwardMessage(current_forward_msg);
+                BufferConnectCredit[preHeadFlitVCID]--;//decrement credit count
+                EV<<"BufferConnectCredit["<<preHeadFlitVCID<<"]="<<BufferConnectCredit[preHeadFlitVCID]<<"\n";
                 numFlitSent++;
                 if (current_forward_msg->getIsHead() == true) {
                     numPackageSent++;
@@ -170,8 +184,8 @@ void Processor::handleMessage(cMessage *msg)
 
         }else if(msg == selfMsgGenMsg){
 
-            //if(getIndex() == 0){ //processor产生msg的模式,需要改进
-            if (true) {
+            if(getIndex() == 0){ //processor产生msg的模式,需要改进
+            //if (true) {
 
                 //**********************产生flit*****************************
                 if(FlitCir == 0 && OutBuffer[0] == nullptr){ //要产生新的head flit，同时buffer又有空间来存储剩余的body flit
@@ -209,7 +223,9 @@ void Processor::handleMessage(cMessage *msg)
 
 
                 }else{//要产生新的package，但是buffer空间不够，drop掉该package
+                    //FlitCir == 0 && OutBuffer[0] != nullptr
                     numDropped++;
+                    dropFlag = true; //如果drop了一个flit的，则置为1，进入下面的定时时，会以一个时钟周期作为定时单位，而不是泊松或自相似的时间间隔
 
                 }
 
@@ -249,7 +265,7 @@ void Processor::handleMessage(cMessage *msg)
                 //scheduleAt(simTime()+0.1, msg);
 
                 //package之间的时间间隔为泊松分布或自相似分布，同一个package的flit之间间隔为CLK_CYCLE
-                if(FlitCir == 0){
+                if(FlitCir == 0 && dropFlag == false){
 #ifdef SELF_SIMILARITY //自相似分布
                     double offTime = ParetoOFF();
 
@@ -273,12 +289,15 @@ void Processor::handleMessage(cMessage *msg)
 
                 }else{
                     scheduleAt(simTime()+CLK_CYCLE,selfMsgGenMsg);
+                    dropFlag = false;
                 }
 
 
             }
 
-        }else{
+        }
+        /*
+        else{
             //******************更新buffer信息定时**********************
             scheduleAt(simTime()+Buffer_Info_Update_Interval,selfMsgBufferInfoP);
 
@@ -299,6 +318,7 @@ void Processor::handleMessage(cMessage *msg)
 
 
         }
+        */
 
     }else{
         //************************非self message*********************
@@ -310,9 +330,13 @@ void Processor::handleMessage(cMessage *msg)
             BufferInfoMsg *bufferInfoMsg = check_and_cast<BufferInfoMsg *>(msg);
             int from_port=bufferInfoMsg->getFrom_port();
             //更新BufferAvailConnect[PortNum][VC]
-            for(int j=0;j<VC;j++){
-                BufferAvailConnectP[j]=bufferInfoMsg->getBufferAvail(j);
-            }
+            //for(int j=0;j<VC;j++){
+            //    BufferAvailConnectP[j]=bufferInfoMsg->getBufferAvail(j);
+            //}
+
+            int vcid = bufferInfoMsg->getVcid();
+            BufferConnectCredit[vcid]++; //increment credit count
+            EV<<"BufferConnectCredit["<<vcid<<"]="<<BufferConnectCredit[vcid]<<"\n";
             if (Verbose >= VERBOSE_BUFFER_INFO_MESSAGES) {
                 EV<<"Receiving bufferInfoMsg, Updating buffer state >> PROCESSOR: "<<getIndex()<<"("<<ppid2plid(getIndex())<<"), INPORT: "<<from_port<<
                     ", Received MSG: { "<<bufferInfoMsg<<" }\n";
@@ -337,6 +361,7 @@ void Processor::handleMessage(cMessage *msg)
 
             // update statistics.
             numFlitReceived++;
+            flitByHop += hopcount + 1; //包含最后一跳路由器到processor
             if (ftmsg->getIsHead() == true) {
                 packageDelayCount = ftmsg->getFlitCount();
                 headFlitGenTime = ftmsg->getPackageGenTime();
@@ -412,7 +437,7 @@ FatTreeMsg* Processor::generateMessage(bool isHead, int flitCount)
         int vc_id = intuniform(0,VC-1); //随机分配vc通道, 根据下一跳router的vc buffer情况来选择合适的vcid
         for(int i=0;i<VC;i++){
             vc_id = (vc_id + i) % VC;
-            if(BufferAvailConnectP[vc_id] == true){
+            if(BufferConnectCredit[vc_id] != 0){
                 break;
             }
         }
@@ -474,6 +499,7 @@ void Processor::forwardMessage(FatTreeMsg *msg)
     EV << "Forwarding message { " << msg << " } from processor to router, VCID = "<<preHeadFlitVCID<<"\n";
 
 }
+
 void Processor::forwardBufferInfoMsgP(BufferInfoMsg *msg){
     send(msg,"port$o");
     int cur_ppid=getIndex();//当前路由器的id
@@ -562,10 +588,12 @@ void Processor::finish()
     recordScalar("#package sent", numPackageSent);
     recordScalar("#flit received", numFlitReceived);
     recordScalar("#package received", numPackageReceived);
-    recordScalar("#dropped", numDropped);
+    recordScalar("#flit dropped", numDropped);
+    recordScalar("#flitByHop", flitByHop);
 
-    long timeCount = simTime().dbl() - Sim_Start_Time;
+
     if(getIndex() == 0) {
+        double timeCount = simTime().dbl() - Sim_Start_Time;
         recordScalar("#timeCount", timeCount);
     }
 

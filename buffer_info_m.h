@@ -38,8 +38,9 @@
  *     //string anotherField;
  *     //double arrayField1[];
  *     //double arrayField2[10];
- *     int from_port;//该msg从Router的哪个端口过来
- *     bool BufferAvail[];//保存与from_port端口相连的路由器对应端口的buffer状态，可变长度数组
+ *     int from_port; //该msg从Router的哪个端口过来
+ *     bool BufferAvail[]; //保存与from_port端口相连的路由器对应端口的buffer状态，可变长度数组
+ *     int vcid; //from upstream router, decrement credit count
  * }
  * </pre>
  */
@@ -49,6 +50,7 @@ class BufferInfoMsg : public ::omnetpp::cMessage
     int from_port;
     bool *BufferAvail; // array ptr
     unsigned int BufferAvail_arraysize;
+    int vcid;
 
   private:
     void copy(const BufferInfoMsg& other);
@@ -73,6 +75,8 @@ class BufferInfoMsg : public ::omnetpp::cMessage
     virtual unsigned int getBufferAvailArraySize() const;
     virtual bool getBufferAvail(unsigned int k) const;
     virtual void setBufferAvail(unsigned int k, bool BufferAvail);
+    virtual int getVcid() const;
+    virtual void setVcid(int vcid);
 };
 
 inline void doParsimPacking(omnetpp::cCommBuffer *b, const BufferInfoMsg& obj) {obj.parsimPack(b);}

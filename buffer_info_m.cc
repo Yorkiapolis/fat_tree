@@ -168,6 +168,7 @@ BufferInfoMsg::BufferInfoMsg(const char *name, int kind) : ::omnetpp::cMessage(n
     this->from_port = 0;
     BufferAvail_arraysize = 0;
     this->BufferAvail = 0;
+    this->vcid = 0;
 }
 
 BufferInfoMsg::BufferInfoMsg(const BufferInfoMsg& other) : ::omnetpp::cMessage(other)
@@ -198,6 +199,7 @@ void BufferInfoMsg::copy(const BufferInfoMsg& other)
     BufferAvail_arraysize = other.BufferAvail_arraysize;
     for (unsigned int i=0; i<BufferAvail_arraysize; i++)
         this->BufferAvail[i] = other.BufferAvail[i];
+    this->vcid = other.vcid;
 }
 
 void BufferInfoMsg::parsimPack(omnetpp::cCommBuffer *b) const
@@ -206,6 +208,7 @@ void BufferInfoMsg::parsimPack(omnetpp::cCommBuffer *b) const
     doParsimPacking(b,this->from_port);
     b->pack(BufferAvail_arraysize);
     doParsimArrayPacking(b,this->BufferAvail,BufferAvail_arraysize);
+    doParsimPacking(b,this->vcid);
 }
 
 void BufferInfoMsg::parsimUnpack(omnetpp::cCommBuffer *b)
@@ -220,6 +223,7 @@ void BufferInfoMsg::parsimUnpack(omnetpp::cCommBuffer *b)
         this->BufferAvail = new bool[BufferAvail_arraysize];
         doParsimArrayUnpacking(b,this->BufferAvail,BufferAvail_arraysize);
     }
+    doParsimUnpacking(b,this->vcid);
 }
 
 int BufferInfoMsg::getFrom_port() const
@@ -260,6 +264,16 @@ void BufferInfoMsg::setBufferAvail(unsigned int k, bool BufferAvail)
 {
     if (k>=BufferAvail_arraysize) throw omnetpp::cRuntimeError("Array of size %d indexed by %d", BufferAvail_arraysize, k);
     this->BufferAvail[k] = BufferAvail;
+}
+
+int BufferInfoMsg::getVcid() const
+{
+    return this->vcid;
+}
+
+void BufferInfoMsg::setVcid(int vcid)
+{
+    this->vcid = vcid;
 }
 
 class BufferInfoMsgDescriptor : public omnetpp::cClassDescriptor
@@ -326,7 +340,7 @@ const char *BufferInfoMsgDescriptor::getProperty(const char *propertyname) const
 int BufferInfoMsgDescriptor::getFieldCount() const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
-    return basedesc ? 2+basedesc->getFieldCount() : 2;
+    return basedesc ? 3+basedesc->getFieldCount() : 3;
 }
 
 unsigned int BufferInfoMsgDescriptor::getFieldTypeFlags(int field) const
@@ -340,8 +354,9 @@ unsigned int BufferInfoMsgDescriptor::getFieldTypeFlags(int field) const
     static unsigned int fieldTypeFlags[] = {
         FD_ISEDITABLE,
         FD_ISARRAY | FD_ISEDITABLE,
+        FD_ISEDITABLE,
     };
-    return (field>=0 && field<2) ? fieldTypeFlags[field] : 0;
+    return (field>=0 && field<3) ? fieldTypeFlags[field] : 0;
 }
 
 const char *BufferInfoMsgDescriptor::getFieldName(int field) const
@@ -355,8 +370,9 @@ const char *BufferInfoMsgDescriptor::getFieldName(int field) const
     static const char *fieldNames[] = {
         "from_port",
         "BufferAvail",
+        "vcid",
     };
-    return (field>=0 && field<2) ? fieldNames[field] : nullptr;
+    return (field>=0 && field<3) ? fieldNames[field] : nullptr;
 }
 
 int BufferInfoMsgDescriptor::findField(const char *fieldName) const
@@ -365,6 +381,7 @@ int BufferInfoMsgDescriptor::findField(const char *fieldName) const
     int base = basedesc ? basedesc->getFieldCount() : 0;
     if (fieldName[0]=='f' && strcmp(fieldName, "from_port")==0) return base+0;
     if (fieldName[0]=='B' && strcmp(fieldName, "BufferAvail")==0) return base+1;
+    if (fieldName[0]=='v' && strcmp(fieldName, "vcid")==0) return base+2;
     return basedesc ? basedesc->findField(fieldName) : -1;
 }
 
@@ -379,8 +396,9 @@ const char *BufferInfoMsgDescriptor::getFieldTypeString(int field) const
     static const char *fieldTypeStrings[] = {
         "int",
         "bool",
+        "int",
     };
-    return (field>=0 && field<2) ? fieldTypeStrings[field] : nullptr;
+    return (field>=0 && field<3) ? fieldTypeStrings[field] : nullptr;
 }
 
 const char **BufferInfoMsgDescriptor::getFieldPropertyNames(int field) const
@@ -436,6 +454,7 @@ std::string BufferInfoMsgDescriptor::getFieldValueAsString(void *object, int fie
     switch (field) {
         case 0: return long2string(pp->getFrom_port());
         case 1: return bool2string(pp->getBufferAvail(i));
+        case 2: return long2string(pp->getVcid());
         default: return "";
     }
 }
@@ -452,6 +471,7 @@ bool BufferInfoMsgDescriptor::setFieldValueAsString(void *object, int field, int
     switch (field) {
         case 0: pp->setFrom_port(string2long(value)); return true;
         case 1: pp->setBufferAvail(i,string2bool(value)); return true;
+        case 2: pp->setVcid(string2long(value)); return true;
         default: return false;
     }
 }

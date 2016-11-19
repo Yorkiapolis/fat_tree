@@ -17,6 +17,7 @@
 #include "fat_tree_m.h"
 #include "fat_tree.h"
 #include "buffer_info_m.h"
+#include "tech_power.h"
 
 
 
@@ -36,13 +37,15 @@ using namespace omnetpp;
 /*************************************************
  * TODO:
  *
- * msg进来后通过静态的方式选择virtual channel，可以改进
+ *
  *
  * Switch Allocator目前也是采用轮循方式，可否改进？
  *
  * flit注入方式研究一下
  *
- * 目前是当个信号包，如果一个包多个flit如何设计？
+ * 虚通道的功能，一个Input channel有2个虚通道，其中一个仲裁胜利，但阻塞住了，另外一个应该可以通行。现在仲裁单位是package，会阻塞另外一个通道，需要改进
+ * 输出端口仲裁，输入端口数据的数据以package为单位，否则会发生数据混淆。但是虚通道的仲裁不需要以package为单位，对每个虚通道设置一个寄存器
+ * 用来保存该虚通道这个package的输出端口是哪个，然后虚通道仲裁用轮巡，可以防止一个虚通道阻塞时，其他虚通道可用
  * ***********************************************
  */
 
@@ -53,15 +56,16 @@ class Router : public cSimpleModule
   private:
     //long numSent;
     //long numReceived;
-    cMessage *selfMsgAlloc;
-    cMessage *selfMsgBufferInfo;
+    cMessage *selfMsgAlloc; //message仲裁定时信号
+    //cMessage *selfMsgBufferInfo; //buffer通知定时信号
 
     //cLongHistogram hopCountStats;
     //cOutVector hopCountVector;
 
     //每个Port的buffer状态
-    bool BufferAvailCurrent[PortNum][VC];//当前路由器的buffer状态
-    bool BufferAvailConnect[PortNum][VC];//相连路由器对应端口号的下一跳路由器buffer状态
+    //bool BufferAvailCurrent[PortNum][VC];//当前路由器的buffer状态
+    //bool BufferAvailConnect[PortNum][VC];//相连路由器对应端口号的下一跳路由器buffer状态
+    int BufferConnectCredit[PortNum][VC]; //连接路由器端口的buffer的credit，即空闲缓存大小
 
     //Input Buffer, Routing
     FatTreeMsg* VCMsgBuffer[PortNum][VC][BufferDepth]; //virtual channel的buffer,里面存放收到的Flit信息
@@ -85,6 +89,10 @@ class Router : public cSimpleModule
     int SAllocFlitCount[PortNum];//存放输出端口一个packge的flit count，同时用于判断输出端口是否被占用
     int SAllocNextVCID[PortNum];//存放输出端口要输出Flit的下一个Router的VCID
 
+    double RouterPower;
+
+    double flitReceived; //用于计算toggle rate
+
 
 
 
@@ -105,6 +113,8 @@ class Router : public cSimpleModule
     virtual int calRoutePort(FatTreeMsg *msg);
     virtual int getNextRouterPort(int current_out_port); //计算下一个相连的router的端口
     virtual int getNextRouterAvailVCID(int port_num);//计算下一个节点相应端口可用的virtual channel
+    virtual bool connectToProcessor(int port_num);
+    virtual double getRouterPower();//计算路由器功耗
 
 
     // The finish() function is called by OMNeT++ at the end of the simulation:
@@ -115,13 +125,13 @@ Define_Module(Router);
 
 Router::Router(){
     selfMsgAlloc=nullptr;
-    selfMsgBufferInfo=nullptr;
+    //selfMsgBufferInfo=nullptr;
 }
 
 
 Router::~Router(){
     cancelAndDelete(selfMsgAlloc);
-    cancelAndDelete(selfMsgBufferInfo);
+    //cancelAndDelete(selfMsgBufferInfo);
 }
 
 void Router::initialize()
@@ -172,15 +182,19 @@ void Router::initialize()
     //对selfMsg进行初始化
     selfMsgAlloc = new cMessage("selfMsgAlloc");
     scheduleAt(Sim_Start_Time, selfMsgAlloc);
-    selfMsgBufferInfo = new cMessage("selfMsgBufferInfo");
-    scheduleAt(Buffer_Info_Sim_Start, selfMsgBufferInfo);
+    //selfMsgBufferInfo = new cMessage("selfMsgBufferInfo");
+    //scheduleAt(Buffer_Info_Sim_Start, selfMsgBufferInfo);
 
     for(int i=0;i<PortNum;i++){
         for(int j=0;j<VC;j++){
-            BufferAvailCurrent[i][j]=true;
-            BufferAvailConnect[i][j]=false;
+            //BufferAvailCurrent[i][j]=true;
+            //BufferAvailConnect[i][j]=false;
+            BufferConnectCredit[i][j] = BufferDepth;
         }
     }
+
+    RouterPower = 0;
+    flitReceived = 0;
 
 }
 
@@ -276,9 +290,9 @@ void Router::handleMessage(cMessage *msg)
                     int win_vcid = VCAllocWinVCID[input_port];
                     int nextVCID = SAllocNextVCID[i];
                     //判断下个路由器是否有空间接受此Flit
-                    if(BufferAvailConnect[i][nextVCID] == true){
+                    if(BufferConnectCredit[i][nextVCID] != 0){
                         FatTreeMsg* forward_msg=VCMsgBuffer[input_port][win_vcid][0];
-                        int outport = VCAllocWinOutPort[input_port];//
+                        int outport = VCAllocWinOutPort[input_port]; //output应该等于i
                         if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
                             EV<<"Switch Traversal >> ROUTER: "<<getIndex()<<"("<<swpid2swlid(getIndex())<<"), OUTPORT: "<<i<<
                                     ", SAllocWinInPort: "<<input_port<<", VCAllocWinVCID: "<<win_vcid<<
@@ -304,12 +318,29 @@ void Router::handleMessage(cMessage *msg)
                         }
                         VCMsgBuffer[input_port][win_vcid][BufferDepth-1]=nullptr;
                         //VCOutPort[inport][vcid][BufferDepth-1]=-1;
+
+                        //判断路由器是否和processor相连，如果相连则不需要decrement credit，因为processor的接受能力是无限的
+                        if(!connectToProcessor(outport)){ //与路由器相连
+                            BufferConnectCredit[i][nextVCID]--;
+                        }
+                        EV<<"BufferConnectCredit["<<i<<"]["<<nextVCID<<"]="<<BufferConnectCredit[i][nextVCID]<<"\n";
+
+                        //每转发input buffer里面的一个flit，就产生一个流控信号，通知上游router，进行increment credit操作
+                        int from_port = getNextRouterPort(input_port);
+                        BufferInfoMsg *bufferInfoMsg = new BufferInfoMsg("bufferInfoMsg");
+                        bufferInfoMsg->setFrom_port(from_port);
+                        bufferInfoMsg->setVcid(win_vcid);
+                        //发送bufferInfoMsg
+                        forwardBufferInfoMsg(bufferInfoMsg, input_port);
+
                     }
 
                 }
 
             }
-        }else{//自消息为buffer更新定时消息
+        }
+        /*
+        else{//自消息为buffer更新定时消息
             //******************更新buffer信息定时**********************
             //更新buffer信息
             scheduleAt(simTime()+Buffer_Info_Update_Interval,selfMsgBufferInfo);
@@ -340,6 +371,7 @@ void Router::handleMessage(cMessage *msg)
             }
 
         }
+        */
 
 
     }else{ //非自消息，即收到其他路由器的消息
@@ -350,9 +382,12 @@ void Router::handleMessage(cMessage *msg)
             BufferInfoMsg *bufferInfoMsg = check_and_cast<BufferInfoMsg *>(msg);
             int from_port=bufferInfoMsg->getFrom_port();
             //更新BufferAvailConnect[PortNum][VC]
-            for(int j=0;j<VC;j++){
-                BufferAvailConnect[from_port][j]=bufferInfoMsg->getBufferAvail(j);
-            }
+            //for(int j=0;j<VC;j++){
+            //    BufferAvailConnect[from_port][j]=bufferInfoMsg->getBufferAvail(j);
+            //}
+            int vcid = bufferInfoMsg->getVcid();
+            BufferConnectCredit[from_port][vcid]++;
+            EV<<"BufferConnectCredit["<<from_port<<"]["<<vcid<<"]="<<BufferConnectCredit[from_port][vcid]<<"\n";
             if (Verbose >= VERBOSE_BUFFER_INFO_MESSAGES) {
                 EV<<"Receiving bufferInfoMsg, Updating buffer state >> ROUTER: "<<getIndex()<<"("<<swpid2swlid(getIndex())<<"), INPORT: "<<from_port<<
                     ", Received MSG: { "<<bufferInfoMsg<<" }\n";
@@ -365,6 +400,7 @@ void Router::handleMessage(cMessage *msg)
             //收到的消息为FatTreeMsg数据消息
 
             FatTreeMsg *ftmsg = check_and_cast<FatTreeMsg *>(msg);
+            flitReceived += 1;
 
             // 1 输入存储 Input Buffer，决定放到哪个virtual channel
             //判断是否为Head Flit
@@ -632,18 +668,74 @@ int Router::getNextRouterPort(int current_out_port){
     }
     return k;
 }
+
+bool Router::connectToProcessor(int port_num) {
+    int cur_swpid=getIndex();//当前路由器的id
+    int cur_swlid=swpid2swlid(cur_swpid);
+    int level=cur_swlid/pow(10,LevelNum-1);//Router的level
+    if (level == 0 && port_num < PortNum/2)
+        return true;
+    return false;
+}
+
+
 int Router::getNextRouterAvailVCID(int port_num){
     int vc_id = intuniform(0,VC-1); //随机分配一个通道，以此vc开始循环判断是否有空的vc，增加随机分布，防止每次都从0开始
     for(int i=0;i<VC;i++){
         int vcid_tmp = (vc_id + i)%VC;
-        if(BufferAvailConnect[port_num][vcid_tmp] == true){
+        if(BufferConnectCredit[port_num][vcid_tmp] != 0){
             return vcid_tmp;
         }
     }
     return -1;
 
 }
+double Router::getRouterPower() {
 
+    double timeCount = simTime().dbl() - Sim_Start_Time;
+    double clockCount = timeCount / CLK_CYCLE; //时钟周期数
+    double TR = flitReceived / (PortNum * clockCount);
+    //recordScalar("TR", );
+    //instances
+    int XBAR_insts = PortNum * PortNum * FlitWidth;
+    int SWVC_insts = 9 * ((pow(PortNum,2) * VC * VC) + pow(PortNum,2) + (PortNum * VC) - PortNum);
+    int INBUF_insts = 180 * PortNum * VC + 2 * PortNum * VC * BufferDepth * FlitWidth + 2* PortNum *
+            PortNum * VC * BufferDepth + 3 * PortNum * VC * BufferDepth + 5 * PortNum * PortNum
+            * BufferDepth + PortNum * PortNum + PortNum * FlitWidth + 15 * PortNum;
+    int OUTBUF_insts = 25 * PortNum + 80 * PortNum * VC;
+    int CLKCTRL_insts = 0.02 * (SWVC_insts + INBUF_insts + OUTBUF_insts);
+
+    //leakage power
+    double XBAR_leakage_power = MUX2_leak_nW * XBAR_insts;
+    double SWVC_leakage_power = ((6*NOR_leak_nW + 2*INV_leak_nW + DFF_leak_nW)/9)* SWVC_insts;
+    double INBUF_leakage_power = ((AOI_leak_nW + DFF_leak_nW)/2) * INBUF_insts;
+    double OUTBUF_leakage_power = ((AOI_leak_nW + DFF_leak_nW)/2) * OUTBUF_insts;
+    double CLKCTRL_leakage_power = ((AOI_leak_nW + INV_leak_nW)/2) * CLKCTRL_insts;
+
+    //internal power
+    double XBAR_internal_power = MUX2_int_J * TR * XBAR_insts;
+    double SWVC_internal_power = (6*NOR_int_J + 2*INV_int_J + DFF_int_J) * TR * SWVC_insts;
+    double INBUF_internal_power = (AOI_int_J + DFF_int_J) * .5 * (INBUF_insts * TR + .05 * INBUF_insts);
+    double OUTBUF_internal_power = (AOI_int_J + DFF_int_J) * .5 * (OUTBUF_insts * TR + .05 * OUTBUF_insts);
+    double CLKCTRL_internal_power = (AOI_int_J + INV_int_J) * CLKCTRL_insts * TR;
+
+    //switching power
+    double XBAR_switching_power = 0.5 * 1.4 * MUX2_load_pF * VDD * VDD * TR * FREQ_Hz;
+    double SWVC_switching_power = 0.5 *1.4 * (NOR_load_pF + INV_load_pF + DFF_load_pF) * VDD *  VDD * FREQ_Hz * SWVC_insts * TR;
+    double INBUF_switching_power = 0.5 *1.4 * VDD * VDD * FREQ_Hz * .5 * (INBUF_insts * TR * AOI_load_pF + .05 * INBUF_insts * DFF_load_pF);
+    double OUTBUF_switching_power = 0.5 *1.4 * VDD * VDD * FREQ_Hz * .5 * (OUTBUF_insts * TR * AOI_load_pF + .05 * OUTBUF_insts * DFF_load_pF);
+    double CLKCTRL_switching_power = .5 * 1.4 *(INV_load_pF + AOI_load_pF) * VDD * VDD * FREQ_Hz * CLKCTRL_insts * TR;
+
+    double p_leakage = 1e-6 * (XBAR_leakage_power + SWVC_leakage_power + INBUF_leakage_power + OUTBUF_leakage_power + CLKCTRL_leakage_power);
+    double p_internal = XBAR_internal_power + SWVC_internal_power + INBUF_internal_power + OUTBUF_internal_power + CLKCTRL_internal_power;
+    double p_switching = 1e-9 * (XBAR_switching_power + SWVC_switching_power + INBUF_switching_power + OUTBUF_switching_power + CLKCTRL_switching_power);
+
+    double p_total = p_leakage + p_internal + p_switching;
+
+    return p_total;
+
+
+}
 void Router::finish()
 {
     // This function is called by OMNeT++ at the end of the simulation.
@@ -658,5 +750,8 @@ void Router::finish()
     //recordScalar("#received", numReceived);
 
     //hopCountStats.recordAs("hop count");
+    double routerPower = getRouterPower();
+    EV <<"Router power: " << routerPower <<endl;
+    recordScalar("router power", routerPower);
 }
 

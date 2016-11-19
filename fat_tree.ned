@@ -42,9 +42,11 @@ network Fat_tree
 {
 	//@display("bgb=110,127");
     types:
-        channel Channel extends ned.DelayChannel
+        channel Channel extends ned.DatarateChannel
         {
             delay = 10ms;
+            datarate = 100Mbps;
+            //ber = 1e-10;//bit error rate
         }
 	submodules:
         router[20]: Router {

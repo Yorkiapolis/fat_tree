@@ -139,5 +139,6 @@ $O/processor.o: processor.cc \
 $O/router.o: router.cc \
 	buffer_info_m.h \
 	fat_tree.h \
-	fat_tree_m.h
+	fat_tree_m.h \
+	tech_power.h
 
