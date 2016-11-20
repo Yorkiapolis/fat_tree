@@ -208,11 +208,11 @@ void Router::handleMessage(cMessage *msg)
 
             scheduleAt(simTime()+CLK_CYCLE,selfMsgAlloc);
 
+
             // 3 虚通道仲裁 Virtual Channel Allocation
             //虚通道仲裁采用Round Robin轮循调度算法
             //采用VCAllocWinVCID来轮流指向VC个虚通道
             //对每个端口都进行判决
-
             for(int i=0;i<PortNum;i++){
                 //如果上一次仲裁胜利的Virtual Channel的Flit还没传输完，即VCAllocWinFlitCount不为0，那么跳过本次仲裁，沿用上一次仲裁结果
                 if(VCAllocWinFlitCount[i] == 0){
@@ -239,8 +239,6 @@ void Router::handleMessage(cMessage *msg)
                     }
                 }
             }
-
-
 
 
 
@@ -279,6 +277,7 @@ void Router::handleMessage(cMessage *msg)
                     }
                 }
             }
+
 
 
             // 5 交叉开关传输 Switch Traversal
@@ -323,7 +322,10 @@ void Router::handleMessage(cMessage *msg)
                         if(!connectToProcessor(outport)){ //与路由器相连
                             BufferConnectCredit[i][nextVCID]--;
                         }
-                        EV<<"BufferConnectCredit["<<i<<"]["<<nextVCID<<"]="<<BufferConnectCredit[i][nextVCID]<<"\n";
+                        if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
+                            EV<<"BufferConnectCredit["<<i<<"]["<<nextVCID<<"]="<<BufferConnectCredit[i][nextVCID]<<"\n";
+                        }
+
 
                         //每转发input buffer里面的一个flit，就产生一个流控信号，通知上游router，进行increment credit操作
                         int from_port = getNextRouterPort(input_port);
@@ -387,10 +389,11 @@ void Router::handleMessage(cMessage *msg)
             //}
             int vcid = bufferInfoMsg->getVcid();
             BufferConnectCredit[from_port][vcid]++;
-            EV<<"BufferConnectCredit["<<from_port<<"]["<<vcid<<"]="<<BufferConnectCredit[from_port][vcid]<<"\n";
-            if (Verbose >= VERBOSE_BUFFER_INFO_MESSAGES) {
-                EV<<"Receiving bufferInfoMsg, Updating buffer state >> ROUTER: "<<getIndex()<<"("<<swpid2swlid(getIndex())<<"), INPORT: "<<from_port<<
+
+            if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
+                EV<<"Receiving bufferInfoMsg >> ROUTER: "<<getIndex()<<"("<<swpid2swlid(getIndex())<<"), INPORT: "<<from_port<<
                     ", Received MSG: { "<<bufferInfoMsg<<" }\n";
+                EV<<"BufferConnectCredit["<<from_port<<"]["<<vcid<<"]="<<BufferConnectCredit[from_port][vcid]<<"\n";
             }
             delete bufferInfoMsg;
 
@@ -506,7 +509,9 @@ void Router::forwardMessage(FatTreeMsg *msg, int out_port_id)
     send(msg,str1);
     int cur_swpid=getIndex();//当前路由器的id
     int cur_swlid=swpid2swlid(cur_swpid);
-    EV << "Forwarding message { " << msg << " } from router "<<cur_swpid<<"("<<cur_swlid<<")"<< " through port "<<k<<"\n";
+    if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
+        EV << "Forwarding message { " << msg << " } from router "<<cur_swpid<<"("<<cur_swlid<<")"<< " through port "<<k<<"\n";
+    }
 
 }
 
@@ -523,7 +528,7 @@ void Router::forwardBufferInfoMsg(BufferInfoMsg *msg, int out_port_id){
     send(msg,str1);
     int cur_swpid=getIndex();//当前路由器的id
     int cur_swlid=swpid2swlid(cur_swpid);
-    if (Verbose >= VERBOSE_BUFFER_INFO_MESSAGES) {
+    if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
         EV << "Forwarding BufferInfoMsg { " << msg << " } from router "<<cur_swpid<<"("<<cur_swlid<<")"<< " through port "<<k<<"\n";
     }
 
@@ -720,11 +725,11 @@ double Router::getRouterPower() {
     double CLKCTRL_internal_power = (AOI_int_J + INV_int_J) * CLKCTRL_insts * TR;
 
     //switching power
-    double XBAR_switching_power = 0.5 * 1.4 * MUX2_load_pF * VDD * VDD * TR * FREQ_Hz;
-    double SWVC_switching_power = 0.5 *1.4 * (NOR_load_pF + INV_load_pF + DFF_load_pF) * VDD *  VDD * FREQ_Hz * SWVC_insts * TR;
-    double INBUF_switching_power = 0.5 *1.4 * VDD * VDD * FREQ_Hz * .5 * (INBUF_insts * TR * AOI_load_pF + .05 * INBUF_insts * DFF_load_pF);
-    double OUTBUF_switching_power = 0.5 *1.4 * VDD * VDD * FREQ_Hz * .5 * (OUTBUF_insts * TR * AOI_load_pF + .05 * OUTBUF_insts * DFF_load_pF);
-    double CLKCTRL_switching_power = .5 * 1.4 *(INV_load_pF + AOI_load_pF) * VDD * VDD * FREQ_Hz * CLKCTRL_insts * TR;
+    double XBAR_switching_power = 0.5 * 1.4 * MUX2_load_pF * VDD * VDD * TR * FREQ;
+    double SWVC_switching_power = 0.5 *1.4 * (NOR_load_pF + INV_load_pF + DFF_load_pF) * VDD *  VDD * FREQ * SWVC_insts * TR;
+    double INBUF_switching_power = 0.5 *1.4 * VDD * VDD * FREQ * .5 * (INBUF_insts * TR * AOI_load_pF + .05 * INBUF_insts * DFF_load_pF);
+    double OUTBUF_switching_power = 0.5 *1.4 * VDD * VDD * FREQ * .5 * (OUTBUF_insts * TR * AOI_load_pF + .05 * OUTBUF_insts * DFF_load_pF);
+    double CLKCTRL_switching_power = .5 * 1.4 *(INV_load_pF + AOI_load_pF) * VDD * VDD * FREQ * CLKCTRL_insts * TR;
 
     double p_leakage = 1e-6 * (XBAR_leakage_power + SWVC_leakage_power + INBUF_leakage_power + OUTBUF_leakage_power + CLKCTRL_leakage_power);
     double p_internal = XBAR_internal_power + SWVC_internal_power + INBUF_internal_power + OUTBUF_internal_power + CLKCTRL_internal_power;

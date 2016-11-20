@@ -31,18 +31,15 @@
 #define SwLowEach 8
 #define VC 5 //virtual channel
 #define BufferDepth 4 //virtual channel buffer depth, 大于等于2
-#define BufferOut 0 //Router output buffer
 #define FlitWidth 32
-#define FixedFlitLength 4 //一个package中最大flit的长度,也是processor中buffer的长度,poisson分布为定长
+#define FixedFlitLength 4 //一个packet中最大flit的长度,也是processor中buffer的长度,poisson分布为该定长
 
 
 //时钟相关参数
-#define FREQ_Hz 1e9  //用于功耗仿真
-#define CLK_CYCLE 0.1 //时钟周期
-#define ROUND 10 //为时钟周期的倒数
-//#define Buffer_Info_Update_Interval 0.1 //和时钟周期保持一致，但是两者之间必须要有时间上的间隔
+#define FREQ 1e9  //用于功耗仿真，单位hz
+#define CLK_CYCLE 1/FREQ //时钟周期
 #define Sim_Start_Time 1 //1s 开始仿真
-//#define Buffer_Info_Sim_Start 0.98//比Sim_Start_Time提前0.05，同时考虑channel传输延迟0.1s，这个是Buffer更新信号的开始仿真时间
+#define TimeScale 0.1 //不改，用于泊松分布和自相似分布，如lambda=10，表示1s内10个flit，得到的时间间隔除以TimeScale再round取整
 
 
 //Space Distribution
@@ -52,7 +49,9 @@
 //#define SELF_SIMILARITY //自相似分布
 #define POISSON_DIST //采用泊松分布
 
+//自相似和泊松分布的取值范围小于10，单位时间为1s，但TimeScale会进行换算，最后乘以时钟周期
 //自相似和泊松分布的参数
+
 //自相似分布Pareto参数
 #define ALPHA_ON 4
 #define ALPHA_OFF 2
@@ -62,10 +61,9 @@
 
 
 //调试信息
-#define Verbose 2
+#define Verbose 1
 #define VERBOSE_DEBUG_MESSAGES 1
-#define VERBOSE_BUFFER_INFO_MESSAGES 3
-#define VERBOSE_DETAIL_DEBUG_MESSAGES 4
+#define VERBOSE_DETAIL_DEBUG_MESSAGES 2
 
 #endif /* FAT_TREE_H_ */
 

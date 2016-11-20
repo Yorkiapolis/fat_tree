@@ -170,7 +170,9 @@ void Processor::handleMessage(cMessage *msg)
                 FatTreeMsg* current_forward_msg = OutBuffer[0];
                 forwardMessage(current_forward_msg);
                 BufferConnectCredit[preHeadFlitVCID]--;//decrement credit count
-                EV<<"BufferConnectCredit["<<preHeadFlitVCID<<"]="<<BufferConnectCredit[preHeadFlitVCID]<<"\n";
+                if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
+                    EV<<"BufferConnectCredit["<<preHeadFlitVCID<<"]="<<BufferConnectCredit[preHeadFlitVCID]<<"\n";
+                }
                 numFlitSent++;
                 if (current_forward_msg->getIsHead() == true) {
                     numPackageSent++;
@@ -201,18 +203,24 @@ void Processor::handleMessage(cMessage *msg)
 #else
                     curFlitLength = FixedFlitLength;
 #endif
-
-                    EV << "<<<<<<<<<<Processor: "<<getIndex()<<"("<<ppid2plid(getIndex())<<") is generating Head Flit>>>>>>>>>>\n";
                     FatTreeMsg *newmsg = generateMessage(true, curFlitLength); //Head Flit
-                    EV << newmsg << endl;
+                    if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
+                        EV << "<<<<<<<<<<Processor: "<<getIndex()<<"("<<ppid2plid(getIndex())<<") is generating Head Flit>>>>>>>>>>\n";
+                        EV << newmsg << endl;
+                    }
+
                     preHeadFlitVCID = newmsg->getVc_id();
                     OutBuffer[0] = newmsg;
                     FlitCir = (FlitCir+1) % curFlitLength;
 
                 }else if(FlitCir != 0 ){//产生body flit，buffer一定有空间
-                    EV << "<<<<<<<<<<Processor: "<<getIndex()<<"("<<ppid2plid(getIndex())<<") is generating Body/Tail Flit>>>>>>>>>>\n";
+
                     FatTreeMsg *newmsg = generateMessage(false, -1); // Body or Tail Flit
-                    EV << newmsg << endl;
+                    if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
+                        EV << "<<<<<<<<<<Processor: "<<getIndex()<<"("<<ppid2plid(getIndex())<<") is generating Body/Tail Flit>>>>>>>>>>\n";
+                        EV << newmsg << endl;
+                    }
+
                     for(int i=0;i<FixedFlitLength;i++){
                         if(OutBuffer[i] == nullptr){
                             OutBuffer[i] = newmsg;
@@ -229,49 +237,17 @@ void Processor::handleMessage(cMessage *msg)
 
                 }
 
-                //int vc_id=newmsg->getVc_id();//获取vcid
-                     /*
-                     bool nextRouterHasBuffer = false;
-                     int nextVCID = -1;
-                     for(int i=0;i<VC;i++){
-                         if(BufferAvailConnectP[i]==true){
-                             nextVCID = i;
-                             nextRouterHasBuffer = true;
-                             break;
-                         }
-
-                     }
-                     if(nextRouterHasBuffer){//转发新的fatTreeMsg
-                         newmsg->setVc_id(nextVCID);
-                         forwardMessage(newmsg);
-                         if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
-                             EV<<"Processor Generating and Forwarding New FatTreeMsg >> PROCESSOR: "<<getIndex()<<"("<<ppid2plid(getIndex())<<"), VCID: "
-                                     <<nextVCID<<"\n";
-                         }
-                         //bubble("Starting new one!");
-                     }else{//buffer已满，dropping msg
-                         if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
-                             EV<<"Next Router's Buffer is Full, Dropping FatTreeMsg >> PROCESSOR: "<<getIndex()<<"("<<ppid2plid(getIndex())<<")\n";
-                         }
-                         delete newmsg;
-
-                     }
-                     */
 
 
-
-                //simtime_t delay = par("delayTime");
-                //simtime_t sendNext = par("sendNext");
-                //scheduleAt(simTime()+0.1, msg);
-
+                //**********************产生定时消息*****************************
                 //package之间的时间间隔为泊松分布或自相似分布，同一个package的flit之间间隔为CLK_CYCLE
                 if(FlitCir == 0 && dropFlag == false){
 #ifdef SELF_SIMILARITY //自相似分布
                     double offTime = ParetoOFF();
 
-                    //if (Verbose >= VERBOSE_DETAIL_DEBUG_MESSAGES) {
+                    if (Verbose >= VERBOSE_DETAIL_DEBUG_MESSAGES) {
                         EV << "Self Similarity interval offTime: "<<offTime<<"\n";
-                    //}
+                    }
                     scheduleAt(simTime()+offTime,selfMsgGenMsg);
 
 #elif defined POISSON_DIST //泊松分布
@@ -288,6 +264,7 @@ void Processor::handleMessage(cMessage *msg)
 #endif
 
                 }else{
+                    //FlitCir!=0 || (FlitCir == 0 && dropFlag == true)
                     scheduleAt(simTime()+CLK_CYCLE,selfMsgGenMsg);
                     dropFlag = false;
                 }
@@ -336,10 +313,11 @@ void Processor::handleMessage(cMessage *msg)
 
             int vcid = bufferInfoMsg->getVcid();
             BufferConnectCredit[vcid]++; //increment credit count
-            EV<<"BufferConnectCredit["<<vcid<<"]="<<BufferConnectCredit[vcid]<<"\n";
-            if (Verbose >= VERBOSE_BUFFER_INFO_MESSAGES) {
-                EV<<"Receiving bufferInfoMsg, Updating buffer state >> PROCESSOR: "<<getIndex()<<"("<<ppid2plid(getIndex())<<"), INPORT: "<<from_port<<
+
+            if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
+                EV<<"Receiving bufferInfoMsg >> PROCESSOR: "<<getIndex()<<"("<<ppid2plid(getIndex())<<"), INPORT: "<<from_port<<
                     ", Received MSG: { "<<bufferInfoMsg<<" }\n";
+                EV<<"BufferConnectCredit["<<vcid<<"]="<<BufferConnectCredit[vcid]<<"\n";
             }
             delete bufferInfoMsg;
 
@@ -496,7 +474,9 @@ void Processor::forwardMessage(FatTreeMsg *msg)
 
     msg->setFrom_router_port(getNextRouterPortP());// 设置收到该信息路由器的端口号
     send(msg,"port$o");
-    EV << "Forwarding message { " << msg << " } from processor to router, VCID = "<<preHeadFlitVCID<<"\n";
+    if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
+        EV << "Forwarding message { " << msg << " } from processor to router, VCID = "<<preHeadFlitVCID<<"\n";
+    }
 
 }
 
@@ -504,7 +484,7 @@ void Processor::forwardBufferInfoMsgP(BufferInfoMsg *msg){
     send(msg,"port$o");
     int cur_ppid=getIndex();//当前路由器的id
     int cur_plid=ppid2plid(cur_ppid);
-    if (Verbose >= VERBOSE_BUFFER_INFO_MESSAGES) {
+    if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
         EV << "Forwarding BufferInfoMsg { " << msg << " } from processor "<<cur_ppid<<"("<<cur_plid<<")\n";
     }
 }
@@ -546,7 +526,7 @@ int Processor::plid2ppid(int plid){
 
 double Processor::ParetoON() {
     double exp_time = exponential((double)1/ALPHA_ON);
-    exp_time = round(exp_time*ROUND)/ROUND;
+    exp_time = round(exp_time / TimeScale) * CLK_CYCLE;
     if(exp_time < CLK_CYCLE) {
         exp_time = CLK_CYCLE;
     }
@@ -555,7 +535,7 @@ double Processor::ParetoON() {
 
 double Processor::ParetoOFF() {
     double exp_time = exponential((double)1/ALPHA_OFF);
-    exp_time = round(exp_time*ROUND)/ROUND;
+    exp_time = round(exp_time / TimeScale) * CLK_CYCLE;
     if(exp_time < CLK_CYCLE) {
         exp_time = CLK_CYCLE;
     }
@@ -564,7 +544,7 @@ double Processor::ParetoOFF() {
 
 double Processor::Poisson() {
     double exp_time = exponential((double)1/LAMBDA);
-    exp_time = round(exp_time*ROUND)/ROUND;
+    exp_time = round(exp_time / TimeScale) * CLK_CYCLE;
     if(exp_time < CLK_CYCLE) {
         exp_time = CLK_CYCLE;
     }
