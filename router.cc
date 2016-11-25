@@ -39,13 +39,15 @@ using namespace omnetpp;
  *
  *
  *
- * Switch Allocator目前也是采用轮循方式，可否改进？
+ * 1.Switch Allocator目前也是采用轮循方式，可否改进？
  *
- * flit注入方式研究一下
  *
- * 虚通道的功能，一个Input channel有2个虚通道，其中一个仲裁胜利，但阻塞住了，另外一个应该可以通行。现在仲裁单位是package，会阻塞另外一个通道，需要改进
+ * 2.虚通道的功能，一个Input channel有2个虚通道，其中一个仲裁胜利，但阻塞住了，另外一个应该可以通行。现在仲裁单位是package，会阻塞另外一个通道，需要改进
  * 输出端口仲裁，输入端口数据的数据以package为单位，否则会发生数据混淆。但是虚通道的仲裁不需要以package为单位，对每个虚通道设置一个寄存器
  * 用来保存该虚通道这个package的输出端口是哪个，然后虚通道仲裁用轮巡，可以防止一个虚通道阻塞时，其他虚通道可用
+ *
+ * 3.虚通道的问题，虚通道数量是否与输出端口数量一致，用来存放对应输出端口的数据
+ *
  * ***********************************************
  */
 
@@ -209,7 +211,7 @@ void Router::handleMessage(cMessage *msg)
             scheduleAt(simTime()+CLK_CYCLE,selfMsgAlloc);
 
 
-            // 3 虚通道仲裁 Virtual Channel Allocation
+            // Step 3 虚通道仲裁 Virtual Channel Allocation
             //虚通道仲裁采用Round Robin轮循调度算法
             //采用VCAllocWinVCID来轮流指向VC个虚通道
             //对每个端口都进行判决
@@ -224,7 +226,11 @@ void Router::handleMessage(cMessage *msg)
                                 //VCAllocWinMsg[i]=VCMsgBuffer[i][vcid_tmp][0];//先存着不删除，发出去后再删
                                 VCAllocWinVCID[i]=vcid_tmp;//存着仲裁胜利的vcid
 
-                                // 2 路由计算 Routing Computation, 在VC仲裁胜利后再做路由计算，节省存储资源
+                                // Step 2 路由计算 Routing Computation, 在VC仲裁胜利后再做路由计算，节省存储资源
+                                // 如果flit一进入vc就进行路由计算，那1个vc里面如果有多个packet，那么就需要多个寄存器
+                                // 来保存路由计算的结果；相反，如果在vc的出口进行路由计算，那么只需要1个寄存器就能保存结果；
+                                // 如果虚通道的数量根据输出端口来确定，每个虚通道对应输出的端口号，那么需要一进入就进行路由计算，
+                                // 确定输出端口号
                                 VCAllocWinOutPort[i]=calRoutePort(VCMsgBuffer[i][vcid_tmp][0]);//存储胜利的vc的msg的输出端口
                                 VCAllocWinFlitCount[i]=VCMsgBuffer[i][vcid_tmp][0]->getFlitCount();//取得Flit Count
                                 if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
@@ -243,7 +249,7 @@ void Router::handleMessage(cMessage *msg)
 
 
 
-            // 4 交叉开关仲裁 Switch Allocation
+            //Step 4 交叉开关仲裁 Switch Allocation
             //第二阶段的仲裁主要是对从每个输入端口过来并对同一输出端口提出的请求进行仲裁。
             //当然这些请求都是由输入端某一胜出的虚拟通道发出的。因为有P个输入端口，所以这样的仲裁需要P个输入。
             //这里不用crossbar来实现，用for循环代替crossbar
@@ -280,8 +286,8 @@ void Router::handleMessage(cMessage *msg)
 
 
 
-            // 5 交叉开关传输 Switch Traversal
-            // 对每一个输出端口都转发出msg，同时对存有已转发的msg进行清空
+            //Step 5 交叉开关传输 Switch Traversal
+            //对每一个输出端口都转发出msg，同时对存有已转发的msg进行清空
             for(int i=0;i<PortNum;i++){//对每一个输出端口进行转发
                 if(SAllocFlitCount[i] != 0){//输出端口有数据
                     //先判断下一个Router对应端口对应vc是否有buffer，多个flit一起发时，有可能前面几个flit用完了buffer
@@ -341,39 +347,6 @@ void Router::handleMessage(cMessage *msg)
 
             }
         }
-        /*
-        else{//自消息为buffer更新定时消息
-            //******************更新buffer信息定时**********************
-            //更新buffer信息
-            scheduleAt(simTime()+Buffer_Info_Update_Interval,selfMsgBufferInfo);
-            for(int i=0;i<PortNum;i++){
-                for(int j=0;j<VC;j++){
-                    if(VCMsgBuffer[i][j][BufferDepth-1]==nullptr)
-                        BufferAvailCurrent[i][j]=true;
-                    else
-                        BufferAvailCurrent[i][j]=false;
-                }
-            }
-            //EV<<msg->getName()<<" name\n";
-            //产生bufferInfo信号并向相应端口发送信号
-            for(int i=0;i<PortNum;i++){
-                int from_port=getNextRouterPort(i);
-                BufferInfoMsg *bufferInfoMsg = new BufferInfoMsg("bufferInfoMsg");
-                bufferInfoMsg->setFrom_port(from_port);
-                bufferInfoMsg->setBufferAvailArraySize(VC);//arraySize的大小为VC的数量
-                //设置buffer信息
-                for(int j=0;j<VC;j++){
-                    bool avail=BufferAvailCurrent[i][j];
-                    bufferInfoMsg->setBufferAvail(j, avail);
-                }
-                //发送bufferInfoMsg
-                forwardBufferInfoMsg(bufferInfoMsg, i);
-
-
-            }
-
-        }
-        */
 
 
     }else{ //非自消息，即收到其他路由器的消息
@@ -405,7 +378,7 @@ void Router::handleMessage(cMessage *msg)
             FatTreeMsg *ftmsg = check_and_cast<FatTreeMsg *>(msg);
             flitReceived += 1;
 
-            // 1 输入存储 Input Buffer，决定放到哪个virtual channel
+            //Step 1 输入存储 Input Buffer，决定放到哪个virtual channel
             //判断是否为Head Flit
             if(ftmsg->getIsHead() == true){
                 int input_port = ftmsg->getFrom_router_port();

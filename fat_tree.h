@@ -42,7 +42,7 @@
 #define TimeScale 0.1 //不改，用于泊松分布和自相似分布，如lambda=10，表示1s内10个flit，得到的时间间隔除以TimeScale再round取整
 
 
-//Space Distribution
+//Spatial Distribution
 #define UNIFORM //空间均匀分布
 
 //Time Distribution
