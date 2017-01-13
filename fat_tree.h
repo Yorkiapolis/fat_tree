@@ -29,10 +29,10 @@
 #define SwTop 4
 #define SwLower 16
 #define SwLowEach 8
-#define VC 5 //virtual channel
+#define VC 4 //virtual channel
 #define BufferDepth 4 //virtual channel buffer depth, 大于等于2
-#define FlitWidth 32
-#define FixedFlitLength 4 //一个packet中最大flit的长度,也是processor中buffer的长度,poisson分布为该定长
+#define FlitWidth 256
+#define FixedFlitLength 5 //一个packet中最大flit的长度,也是processor中buffer的长度,poisson分布为该定长
 
 
 //时钟相关参数

@@ -45,7 +45,7 @@ network Fat_tree
         channel Channel extends ned.DatarateChannel
         {
             delay = 1ns;
-            datarate = 25Gbps;
+            datarate = 10Gbps;
             //ber = 1e-10;//bit error rate
         }
 	submodules:

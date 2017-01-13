@@ -48,6 +48,8 @@ using namespace omnetpp;
  *
  * 3.虚通道的问题，虚通道数量是否与输出端口数量一致，用来存放对应输出端口的数据
  *
+ * Feature:
+ * 1. Credit-based flow control
  * ***********************************************
  */
 
