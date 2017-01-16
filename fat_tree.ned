@@ -29,6 +29,7 @@ simple Router
 		inout port_2;
 		inout port_3;
 }
+
 simple Processor
 {
     parameters:

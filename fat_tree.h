@@ -29,6 +29,7 @@
 #define SwTop 4
 #define SwLower 16
 #define SwLowEach 8
+
 #define VC 4 //virtual channel
 #define BufferDepth 4 //virtual channel buffer depth, 大于等于2
 #define FlitWidth 256
@@ -53,8 +54,8 @@
 //自相似和泊松分布的参数
 
 //自相似分布Pareto参数
-#define ALPHA_ON 4
-#define ALPHA_OFF 2
+//#define ALPHA_ON 4
+//#define ALPHA_OFF 2
 
 //Poisson分布参数
 #define LAMBDA 7 //泊松分布中用于产生时间间隔的指数分布的lambda，表示单位时间内(1s)到达的帧数，其倒数为时间间隔的平均值
