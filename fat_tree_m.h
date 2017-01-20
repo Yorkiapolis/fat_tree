@@ -29,7 +29,6 @@
  *     int src_ppid; //源processor的physical id
  *     int dst_ppid; //目标processor的physical id
  * 
- * 
  *     //以下为每个flit都具有的信息
  *     bool isHead;//判断是否为head flit
  *     int hopCount = 0;
