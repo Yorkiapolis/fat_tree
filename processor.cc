@@ -464,8 +464,6 @@ FatTreeMsg* Processor::generateMessage(bool isHead, int flitCount)
         return msg;
 
     }
-
-
 }
 
 //processor转发的路由算法,processor只有一个prot,直接转发出去即可
