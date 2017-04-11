@@ -25,16 +25,21 @@
 #define LevelNum 3
 #define ProcessorNum 16
 #define SwitchNum 20
-#define LinkNum 48 //双向链路乘以2
 #define SwTop 4
 #define SwLower 16
 #define SwLowEach 8
 
-#define VC 4 //virtual channel
-#define BufferDepth 4 //virtual channel buffer depth, 大于等于2
-#define FlitWidth 256
-#define FixedFlitLength 5 //一个packet中最大flit的长度,也是processor中buffer的长度,poisson分布为该定长
+//#define LinkNum 48 //双向链路乘以2，用于功耗仿真
+//曙光5000相关参数，16端口，3虚通道，MTU 1KB，Buffer 4MTU
 
+#define PacketSize 1000 //Byte为单位
+#define FlitSize 200 //Byte为单位
+#define FlitLength 5 // PacketSize / FlitSize
+
+#define VC 3 //virtual channel
+#define BufferDepth 4 * FlitLength //virtual channel buffer depth, 大于等于2，可存放Flit的数量
+//#define FlitWidth 256
+#define ProcessorBufferDepth 4 * FlitLength // processor txQueue 的大小
 
 //时钟相关参数
 #define FREQ 1e9  //用于功耗仿真，单位hz
@@ -59,7 +64,8 @@
 
 //Poisson分布参数
 #define LAMBDA 7 //泊松分布中用于产生时间间隔的指数分布的lambda，表示单位时间内(1s)到达的帧数，其倒数为时间间隔的平均值
-
+//Uniform分布参数
+#define INJECTION_RATE 0.3 //注入率，范围在0.1 - 1之间
 
 //调试信息
 #define Verbose 1
