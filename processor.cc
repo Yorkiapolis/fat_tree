@@ -48,7 +48,7 @@ class Processor : public cSimpleModule
     long flitByHop; //用于计算链路利用率, flit * Hop
     bool dropFlag; //判断本轮是否drop过
 
-    long headFlitGenTime; //head flit的产生时间，用于计算package delay
+    double headFlitGenTime; //head flit的产生时间，用于计算package delay
     int packageDelayCount; //对到达的package的flit进行计数
     //cLongHistogram hopCountStats;
     cOutVector hopCountVector;
@@ -67,7 +67,7 @@ class Processor : public cSimpleModule
     Processor();
     virtual ~Processor();
   protected:
-    virtual FatTreePkt* generateMessage(bool isHead, int flitCount, int vcid);
+    virtual FatTreePkt* generateMessage(bool isHead, bool isTail, int flitCount, int vcid);
     virtual void forwardMessage(FatTreePkt *msg);
     virtual void forwardBufferInfoMsgP(BufferInfoMsg *msg);
     virtual void initialize() override;
@@ -81,7 +81,6 @@ class Processor : public cSimpleModule
 //    virtual double ParetoOFF();
     virtual double Poisson();
     virtual double Uniform();
-
 
     // The finish() function is called by OMNeT++ at the end of the simulation:
     virtual void finish() override;
@@ -155,19 +154,20 @@ void Processor::handleMessage(cMessage *msg)
                 if(channelAvailTime() <= simTime() && BufferConnectCredit[vcid] != 0) { //发送端口空闲，下一个节点有buffer接受此flit
                     txQueue.pop();
                     forwardMessage(current_forward_msg);
-                    BufferConnectCredit[vcid]--;//decrement credit count
-                    if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
-                        EV<<"BufferConnectCredit["<<vcid<<"]="<<BufferConnectCredit[vcid]<<"\n";
-                        numFlitSent++;
-                    }
+                    BufferConnectCredit[vcid]--; //decrement credit count
+                    numFlitSent++;
                     if (current_forward_msg->getIsHead() == true) {
                         numPackageSent++;
+                    }
+
+                    if (Verbose >= VERBOSE_DETAIL_DEBUG_MESSAGES) {
+                        EV<<"BufferConnectCredit["<<vcid<<"]="<<BufferConnectCredit[vcid]<<"\n";
                     }
                 }
 
             }
 
-            scheduleAt(max(simTime()+CLK_CYCLE,channelAvailTime()),selfMsgSendMsg);
+            scheduleAt(std::max(simTime()+CLK_CYCLE,channelAvailTime()),selfMsgSendMsg);
 
         }else if(msg == selfMsgGenMsg){
 
@@ -175,24 +175,32 @@ void Processor::handleMessage(cMessage *msg)
             //if (true) {
 
                 //**********************产生flit*****************************
-                if(txQueue.getLength() < ProcessorBufferDepth){ //要产生新的Packet(head flit + body flit)，同时buffer又有空间来存储
+                if(txQueue.getLength() + FlitLength <= ProcessorBufferDepth){ //要产生新的Packet(head flit + body flit)，同时buffer又有空间来存储
                     int bestVCID = generateBestVCID();
                     for(int i = 0; i < FlitLength; i++) {
                         if(i == 0) {
-                            FatTreePkt* msg = generateMessage(true, FlitLength, bestVCID);
+                            FatTreePkt* msg = generateMessage(true, false, FlitLength, bestVCID);
                             txQueue.insert(msg);
                             if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
                                 EV << "<<<<<<<<<<Processor: "<<getIndex()<<"("<<ppid2plid(getIndex())<<") is generating Head Flit>>>>>>>>>>\n";
                                 EV << msg << endl;
                             }
-                        } else {
-                            FatTreePkt* msg = generateMessage(false, FlitLength, bestVCID);
+                        } else if(i == FlitLength - 1){
+                            FatTreePkt* msg = generateMessage(false, true, FlitLength, bestVCID);
                             txQueue.insert(msg);
                             if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
-                                EV << "<<<<<<<<<<Processor: "<<getIndex()<<"("<<ppid2plid(getIndex())<<") is generating Body/Tail Flit>>>>>>>>>>\n";
+                                EV << "<<<<<<<<<<Processor: "<<getIndex()<<"("<<ppid2plid(getIndex())<<") is generating Tail Flit>>>>>>>>>>\n";
+                                EV << msg << endl;
+                            }
+                        } else {
+                            FatTreePkt* msg = generateMessage(false, false, FlitLength, bestVCID);
+                            txQueue.insert(msg);
+                            if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
+                                EV << "<<<<<<<<<<Processor: "<<getIndex()<<"("<<ppid2plid(getIndex())<<") is generating Body Flit>>>>>>>>>>\n";
                                 EV << msg << endl;
                             }
                         }
+
                     }
 
                 }else{//要产生新的package，但是buffer空间不够，drop掉该package
@@ -241,7 +249,7 @@ void Processor::handleMessage(cMessage *msg)
         //************************收到buffer更新消息******************
         if(strcmp("bufferInfoMsg", msg->getName()) == 0){
 
-            BufferInfoMsg *bufferInfoMsg = check_and_cast<BufferInfoMsg *>(msg);
+            BufferInfoMsg *bufferInfoMsg = check_and_cast<BufferInfoMsg*>(msg);
             int from_port=bufferInfoMsg->getFrom_port();
             int vcid = bufferInfoMsg->getVcid();
             BufferConnectCredit[vcid]++; //increment credit count
@@ -270,7 +278,7 @@ void Processor::handleMessage(cMessage *msg)
             flitByHop += hopcount + 1; //包含最后一跳路由器到processor
             if (ftmsg->getIsHead() == true) {
                 packageDelayCount = ftmsg->getFlitCount();
-                headFlitGenTime = ftmsg->getCreationTime(); //延时的表示方法从产生该Flit到该Flit被目标节点接收，其中包括在发送端txQueue的等待时间
+                headFlitGenTime = ftmsg->getCreationTime().dbl(); //延时的表示方法从产生该Flit到该Flit被目标节点接收，其中包括在发送端txQueue的等待时间
             }
             packageDelayCount--;
             if (packageDelayCount == 0) {
@@ -299,7 +307,7 @@ int Processor::generateBestVCID() {
 }
 
 
-FatTreePkt* Processor::generateMessage(bool isHead, int flitCount, int vcid)
+FatTreePkt* Processor::generateMessage(bool isHead, bool isTail, int flitCount, int vcid)
 {
 
     if(isHead){
@@ -329,6 +337,7 @@ FatTreePkt* Processor::generateMessage(bool isHead, int flitCount, int vcid)
         msg->setFrom_router_port(getNextRouterPortP());//设置收到该msg的Router端口
         msg->setVc_id(vcid);//设置VCID
         msg->setIsHead(isHead); //设置isHead flag
+        msg->setIsTail(isTail);
         msg->setFlitCount(flitCount); // 设置Flit Count
         msg->setPackageGenTime(simTime().dbl());
         msg->setByteLength(FlitSize);
@@ -352,6 +361,7 @@ FatTreePkt* Processor::generateMessage(bool isHead, int flitCount, int vcid)
         msg->setFrom_router_port(getNextRouterPortP());//设置收到该msg的Router端口
         msg->setVc_id(vcid);//设置VC ID
         msg->setIsHead(isHead); //设置isHead flag
+        msg->setIsHead(isTail);
         msg->setFlitCount(-1);
         msg->setByteLength(FlitSize);
         return msg;
@@ -374,7 +384,7 @@ void Processor::forwardMessage(FatTreePkt *msg)
     msg->setFrom_router_port(getNextRouterPortP());// 设置收到该信息路由器的端口号
     send(msg,"port$o");
     if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
-        EV << "Forwarding message { " << msg << " } from processor to router, VCID = "<<msg->getVc_id()<<"\n";
+        EV << "Forwarding message { " << msg << " } from processor "<<getIndex()<<"("<<ppid2plid(getIndex())<<") to router, VCID = "<<msg->getVc_id()<<"\n";
     }
 
 }

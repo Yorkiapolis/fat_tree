@@ -138,10 +138,10 @@ $O/fat_tree_pkt_m.o: fat_tree_pkt_m.cc \
 $O/processor.o: processor.cc \
 	buffer_info_m.h \
 	fat_tree.h \
-	fat_tree_m.h
+	fat_tree_pkt_m.h
 $O/router.o: router.cc \
 	buffer_info_m.h \
 	fat_tree.h \
-	fat_tree_m.h \
+	fat_tree_pkt_m.h \
 	tech_power.h
 

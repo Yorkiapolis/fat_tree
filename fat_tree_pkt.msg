@@ -22,6 +22,7 @@ packet FatTreePkt{
        
     //以下为每个flit都具有的信息
 	bool isHead; //判断是否为head flit
+	bool isTail; //判断是否为tail flit
 	int vc_id; //virtual channel id
 	
 	int hopCount = 0;

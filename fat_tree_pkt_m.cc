@@ -169,6 +169,7 @@ FatTreePkt::FatTreePkt(const char *name, int kind) : ::omnetpp::cPacket(name,kin
     this->src_ppid = 0;
     this->dst_ppid = 0;
     this->isHead = false;
+    this->isTail = false;
     this->vc_id = 0;
     this->hopCount = 0;
     this->from_router_port = 0;
@@ -198,6 +199,7 @@ void FatTreePkt::copy(const FatTreePkt& other)
     this->src_ppid = other.src_ppid;
     this->dst_ppid = other.dst_ppid;
     this->isHead = other.isHead;
+    this->isTail = other.isTail;
     this->vc_id = other.vc_id;
     this->hopCount = other.hopCount;
     this->from_router_port = other.from_router_port;
@@ -211,6 +213,7 @@ void FatTreePkt::parsimPack(omnetpp::cCommBuffer *b) const
     doParsimPacking(b,this->src_ppid);
     doParsimPacking(b,this->dst_ppid);
     doParsimPacking(b,this->isHead);
+    doParsimPacking(b,this->isTail);
     doParsimPacking(b,this->vc_id);
     doParsimPacking(b,this->hopCount);
     doParsimPacking(b,this->from_router_port);
@@ -224,6 +227,7 @@ void FatTreePkt::parsimUnpack(omnetpp::cCommBuffer *b)
     doParsimUnpacking(b,this->src_ppid);
     doParsimUnpacking(b,this->dst_ppid);
     doParsimUnpacking(b,this->isHead);
+    doParsimUnpacking(b,this->isTail);
     doParsimUnpacking(b,this->vc_id);
     doParsimUnpacking(b,this->hopCount);
     doParsimUnpacking(b,this->from_router_port);
@@ -268,6 +272,16 @@ bool FatTreePkt::getIsHead() const
 void FatTreePkt::setIsHead(bool isHead)
 {
     this->isHead = isHead;
+}
+
+bool FatTreePkt::getIsTail() const
+{
+    return this->isTail;
+}
+
+void FatTreePkt::setIsTail(bool isTail)
+{
+    this->isTail = isTail;
 }
 
 int FatTreePkt::getVc_id() const
@@ -374,7 +388,7 @@ const char *FatTreePktDescriptor::getProperty(const char *propertyname) const
 int FatTreePktDescriptor::getFieldCount() const
 {
     omnetpp::cClassDescriptor *basedesc = getBaseClassDescriptor();
-    return basedesc ? 8+basedesc->getFieldCount() : 8;
+    return basedesc ? 9+basedesc->getFieldCount() : 9;
 }
 
 unsigned int FatTreePktDescriptor::getFieldTypeFlags(int field) const
@@ -394,8 +408,9 @@ unsigned int FatTreePktDescriptor::getFieldTypeFlags(int field) const
         FD_ISEDITABLE,
         FD_ISEDITABLE,
         FD_ISEDITABLE,
+        FD_ISEDITABLE,
     };
-    return (field>=0 && field<8) ? fieldTypeFlags[field] : 0;
+    return (field>=0 && field<9) ? fieldTypeFlags[field] : 0;
 }
 
 const char *FatTreePktDescriptor::getFieldName(int field) const
@@ -411,12 +426,13 @@ const char *FatTreePktDescriptor::getFieldName(int field) const
         "src_ppid",
         "dst_ppid",
         "isHead",
+        "isTail",
         "vc_id",
         "hopCount",
         "from_router_port",
         "packageGenTime",
     };
-    return (field>=0 && field<8) ? fieldNames[field] : nullptr;
+    return (field>=0 && field<9) ? fieldNames[field] : nullptr;
 }
 
 int FatTreePktDescriptor::findField(const char *fieldName) const
@@ -427,10 +443,11 @@ int FatTreePktDescriptor::findField(const char *fieldName) const
     if (fieldName[0]=='s' && strcmp(fieldName, "src_ppid")==0) return base+1;
     if (fieldName[0]=='d' && strcmp(fieldName, "dst_ppid")==0) return base+2;
     if (fieldName[0]=='i' && strcmp(fieldName, "isHead")==0) return base+3;
-    if (fieldName[0]=='v' && strcmp(fieldName, "vc_id")==0) return base+4;
-    if (fieldName[0]=='h' && strcmp(fieldName, "hopCount")==0) return base+5;
-    if (fieldName[0]=='f' && strcmp(fieldName, "from_router_port")==0) return base+6;
-    if (fieldName[0]=='p' && strcmp(fieldName, "packageGenTime")==0) return base+7;
+    if (fieldName[0]=='i' && strcmp(fieldName, "isTail")==0) return base+4;
+    if (fieldName[0]=='v' && strcmp(fieldName, "vc_id")==0) return base+5;
+    if (fieldName[0]=='h' && strcmp(fieldName, "hopCount")==0) return base+6;
+    if (fieldName[0]=='f' && strcmp(fieldName, "from_router_port")==0) return base+7;
+    if (fieldName[0]=='p' && strcmp(fieldName, "packageGenTime")==0) return base+8;
     return basedesc ? basedesc->findField(fieldName) : -1;
 }
 
@@ -447,12 +464,13 @@ const char *FatTreePktDescriptor::getFieldTypeString(int field) const
         "int",
         "int",
         "bool",
+        "bool",
         "int",
         "int",
         "int",
         "long",
     };
-    return (field>=0 && field<8) ? fieldTypeStrings[field] : nullptr;
+    return (field>=0 && field<9) ? fieldTypeStrings[field] : nullptr;
 }
 
 const char **FatTreePktDescriptor::getFieldPropertyNames(int field) const
@@ -509,10 +527,11 @@ std::string FatTreePktDescriptor::getFieldValueAsString(void *object, int field,
         case 1: return long2string(pp->getSrc_ppid());
         case 2: return long2string(pp->getDst_ppid());
         case 3: return bool2string(pp->getIsHead());
-        case 4: return long2string(pp->getVc_id());
-        case 5: return long2string(pp->getHopCount());
-        case 6: return long2string(pp->getFrom_router_port());
-        case 7: return long2string(pp->getPackageGenTime());
+        case 4: return bool2string(pp->getIsTail());
+        case 5: return long2string(pp->getVc_id());
+        case 6: return long2string(pp->getHopCount());
+        case 7: return long2string(pp->getFrom_router_port());
+        case 8: return long2string(pp->getPackageGenTime());
         default: return "";
     }
 }
@@ -531,10 +550,11 @@ bool FatTreePktDescriptor::setFieldValueAsString(void *object, int field, int i,
         case 1: pp->setSrc_ppid(string2long(value)); return true;
         case 2: pp->setDst_ppid(string2long(value)); return true;
         case 3: pp->setIsHead(string2bool(value)); return true;
-        case 4: pp->setVc_id(string2long(value)); return true;
-        case 5: pp->setHopCount(string2long(value)); return true;
-        case 6: pp->setFrom_router_port(string2long(value)); return true;
-        case 7: pp->setPackageGenTime(string2long(value)); return true;
+        case 4: pp->setIsTail(string2bool(value)); return true;
+        case 5: pp->setVc_id(string2long(value)); return true;
+        case 6: pp->setHopCount(string2long(value)); return true;
+        case 7: pp->setFrom_router_port(string2long(value)); return true;
+        case 8: pp->setPackageGenTime(string2long(value)); return true;
         default: return false;
     }
 }

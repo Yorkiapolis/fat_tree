@@ -41,6 +41,7 @@
  * 
  *     //以下为每个flit都具有的信息
  *     bool isHead; //判断是否为head flit
+ *     bool isTail; //判断是否为tail flit
  *     int vc_id; //virtual channel id
  * 
  *     int hopCount = 0;
@@ -59,6 +60,7 @@ class FatTreePkt : public ::omnetpp::cPacket
     int src_ppid;
     int dst_ppid;
     bool isHead;
+    bool isTail;
     int vc_id;
     int hopCount;
     int from_router_port;
@@ -89,6 +91,8 @@ class FatTreePkt : public ::omnetpp::cPacket
     virtual void setDst_ppid(int dst_ppid);
     virtual bool getIsHead() const;
     virtual void setIsHead(bool isHead);
+    virtual bool getIsTail() const;
+    virtual void setIsTail(bool isTail);
     virtual int getVc_id() const;
     virtual void setVc_id(int vc_id);
     virtual int getHopCount() const;
