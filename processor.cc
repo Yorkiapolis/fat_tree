@@ -67,7 +67,7 @@ class Processor : public cSimpleModule
     Processor();
     virtual ~Processor();
   protected:
-    virtual FatTreePkt* generateMessage(bool isHead, bool isTail, int flitCount, int vcid);
+    virtual FatTreePkt* generateMessage(bool isHead, bool isTail, int flitCount, int flidID, int vcid);
     virtual void forwardMessage(FatTreePkt *msg);
     virtual void forwardBufferInfoMsgP(BufferInfoMsg *msg);
     virtual void initialize() override;
@@ -171,29 +171,29 @@ void Processor::handleMessage(cMessage *msg)
 
         }else if(msg == selfMsgGenMsg){
 
-            if(getIndex() == 0){ //processor产生msg的模式,需要改进
-            //if (true) {
+//            if(getIndex() == 0){ //processor产生msg的模式,需要改进
+            if (true) {
 
                 //**********************产生flit*****************************
                 if(txQueue.getLength() + FlitLength <= ProcessorBufferDepth){ //要产生新的Packet(head flit + body flit)，同时buffer又有空间来存储
                     int bestVCID = generateBestVCID();
                     for(int i = 0; i < FlitLength; i++) {
                         if(i == 0) {
-                            FatTreePkt* msg = generateMessage(true, false, FlitLength, bestVCID);
+                            FatTreePkt* msg = generateMessage(true, false, FlitLength, i, bestVCID);
                             txQueue.insert(msg);
                             if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
                                 EV << "<<<<<<<<<<Processor: "<<getIndex()<<"("<<ppid2plid(getIndex())<<") is generating Head Flit>>>>>>>>>>\n";
                                 EV << msg << endl;
                             }
                         } else if(i == FlitLength - 1){
-                            FatTreePkt* msg = generateMessage(false, true, FlitLength, bestVCID);
+                            FatTreePkt* msg = generateMessage(false, true, FlitLength, i, bestVCID);
                             txQueue.insert(msg);
                             if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
                                 EV << "<<<<<<<<<<Processor: "<<getIndex()<<"("<<ppid2plid(getIndex())<<") is generating Tail Flit>>>>>>>>>>\n";
                                 EV << msg << endl;
                             }
                         } else {
-                            FatTreePkt* msg = generateMessage(false, false, FlitLength, bestVCID);
+                            FatTreePkt* msg = generateMessage(false, false, FlitLength, i, bestVCID);
                             txQueue.insert(msg);
                             if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
                                 EV << "<<<<<<<<<<Processor: "<<getIndex()<<"("<<ppid2plid(getIndex())<<") is generating Body Flit>>>>>>>>>>\n";
@@ -212,13 +212,6 @@ void Processor::handleMessage(cMessage *msg)
                 //**********************产生定时消息*****************************
                 //package之间的时间间隔为泊松分布或均匀分布
                 if(dropFlag == false){
-//#ifdef SELF_SIMILARITY //自相似分布
-//                    double offTime = ParetoOFF();
-//
-//                    if (Verbose >= VERBOSE_DETAIL_DEBUG_MESSAGES) {
-//                        EV << "Self Similarity interval offTime: "<<offTime<<"\n";
-//                    }
-//                    scheduleAt(simTime()+offTime,selfMsgGenMsg);
 
 #ifdef POISSON_DIST //泊松分布
                     double expTime = Poisson();
@@ -235,7 +228,7 @@ void Processor::handleMessage(cMessage *msg)
 #endif
 
                 }else{
-                    scheduleAt(simTime() + CLK_CYCLE * FlitLength,selfMsgGenMsg);
+                    scheduleAt(simTime() + CLK_CYCLE * FlitLength, selfMsgGenMsg);
                     dropFlag = false;
                 }
 
@@ -259,6 +252,7 @@ void Processor::handleMessage(cMessage *msg)
                     ", Received MSG: { "<<bufferInfoMsg<<" }\n";
                 EV<<"BufferConnectCredit["<<vcid<<"]="<<BufferConnectCredit[vcid]<<"\n";
             }
+
             delete bufferInfoMsg;
 
         }else{
@@ -307,7 +301,7 @@ int Processor::generateBestVCID() {
 }
 
 
-FatTreePkt* Processor::generateMessage(bool isHead, bool isTail, int flitCount, int vcid)
+FatTreePkt* Processor::generateMessage(bool isHead, bool isTail, int flitCount, int flitID, int vcid)
 {
 
     if(isHead){
@@ -327,8 +321,8 @@ FatTreePkt* Processor::generateMessage(bool isHead, bool isTail, int flitCount, 
         int current_plid=ppid2plid(current_ppid);
         int dst_plid=ppid2plid(dst_ppid);
 
-        char msgname[200];//初始分配的空间太小导致数据被改变!!!!!!!
-        sprintf(msgname, "Head Flit, From processor node %d(%d) to node %d(%d), Flit Length: %d", current_ppid,current_plid,dst_ppid,dst_plid,flitCount);
+        char msgname[300];//初始分配的空间太小导致数据被改变!!!!!!!
+        sprintf(msgname, "Head Flit, From processor node %d(%d) to node %d(%d), Flit Length: %d, Flit No: %d", current_ppid,current_plid,dst_ppid,dst_plid,flitCount,flitID+1);
 
         // Create message object and set source and destination field.
         FatTreePkt *msg = new FatTreePkt(msgname);
@@ -351,8 +345,8 @@ FatTreePkt* Processor::generateMessage(bool isHead, bool isTail, int flitCount, 
         return msg;
     }else{
 
-        char msgname[200];//初始分配的空间太小导致数据被改变!!!!!!!
-        sprintf(msgname, "Body/Tail Flit");
+        char msgname[300];//初始分配的空间太小导致数据被改变!!!!!!!
+        sprintf(msgname, "Body/Tail Flit, Flit Length: %d, Flit No: %d", flitCount, flitID+1);
 
         // Create message object and set source and destination field.
         FatTreePkt *msg = new FatTreePkt(msgname);

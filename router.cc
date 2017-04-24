@@ -270,6 +270,9 @@ void Router::handleMessage(cMessage *msg)
                         int m = (port_vc / VC) % PortNum;
                         int n = port_vc % VC;
                         if(RCInputVCState[m][n] == i * VC + j) {//该输入虚通道里面的数据一定是head flit
+                            if(VAInputVCState[m][n] == true) {
+                                EV << "Error: Step 3. VC Allocation >> ROUTER: " << getIndex()<<"("<<swpid2swlid(getIndex()) << "), VAInputVCState != false" << endl;
+                            }
                             VAInputVCState[m][n] = true; //该虚通道仲裁胜利
                             VAOutputVCStatePre[i][j] = m * VC + n;
                             VAOutputVCState[i][j] = m * VC + n;
@@ -292,7 +295,9 @@ void Router::handleMessage(cMessage *msg)
                 bool flag = false;
                 for(int j = 0; j < VC && flag == false; j++, last_vcid++) {
                     int cur_vcid = last_vcid % VC; //Round Robin
-                    if(VAInputVCState[i][cur_vcid] == true) {
+                    //必须保证输入虚通道在虚通道仲裁中胜利（即输出虚通道为次输入虚通道保留）
+                    //此外还需要保证输入buffer有数据，可能head flit传输胜利，但是body flit还没过来
+                    if(VAInputVCState[i][cur_vcid] == true && InputBuffer[i][cur_vcid][0] != nullptr) { //之前写成InputBuffer[i][cur_vcid] != nullptr，查了3天，泪崩
                         int port = RCInputVCState[i][cur_vcid] / VC;
                         int out_vcid = RCInputVCState[i][cur_vcid] % VC;
                         if(OutputBuffer[port][out_vcid] == nullptr) {
@@ -347,6 +352,12 @@ void Router::handleMessage(cMessage *msg)
                 FatTreePkt* current_pkt = InputBuffer[inport][inport_vcid][0];
 
                 //修改VCID
+                //有可能body flit还没传输过来，导致current_pkt == nullptr
+                //可能有bug
+                if(current_pkt == nullptr) {
+                    EV << "Error in Step 5. Switch Traversal in Router " << getIndex() << ", current_pkt is null" << endl;
+                    continue;
+                }
                 current_pkt->setVc_id(output_vcid);
 
                 //对输入缓存进行shift
@@ -362,9 +373,6 @@ void Router::handleMessage(cMessage *msg)
                 BufferInfoMsg* bufferInfoMsg = new BufferInfoMsg("bufferInfoMsg");
                 bufferInfoMsg->setFrom_port(from_port);
                 bufferInfoMsg->setVcid(inport_vcid);
-                //发送bufferInfoMsg
-                forwardBufferInfoMsg(bufferInfoMsg, inport);
-
 
                 //判断是否为tail flit，如果是，则重置寄存器状态
                 if(current_pkt->getIsTail() == true) {
@@ -378,7 +386,8 @@ void Router::handleMessage(cMessage *msg)
                     ", INPORT VCID: "<<inport_vcid<<", InputBuffer: { "<< current_pkt << " }" << '\n';
                 }
 
-
+                //发送bufferInfoMsg
+                forwardBufferInfoMsg(bufferInfoMsg, inport);
 
             }
 

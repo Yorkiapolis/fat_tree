@@ -29,12 +29,11 @@ PROJECTRELATIVE_PATH =
 O = $(PROJECT_OUTPUT_DIR)/$(CONFIGNAME)/$(PROJECTRELATIVE_PATH)
 
 # Object files for local .cc, .msg and .sm files
-OBJS = $O/processor.o $O/router.o $O/buffer_info_m.o $O/fat_tree_m.o $O/fat_tree_pkt_m.o
+OBJS = $O/processor.o $O/router.o $O/buffer_info_m.o $O/fat_tree_pkt_m.o
 
 # Message files
 MSGFILES = \
     buffer_info.msg \
-    fat_tree.msg \
     fat_tree_pkt.msg
 
 # SM files
@@ -131,8 +130,6 @@ depend:
 # DO NOT DELETE THIS LINE -- make depend depends on it.
 $O/buffer_info_m.o: buffer_info_m.cc \
 	buffer_info_m.h
-$O/fat_tree_m.o: fat_tree_m.cc \
-	fat_tree_m.h
 $O/fat_tree_pkt_m.o: fat_tree_pkt_m.cc \
 	fat_tree_pkt_m.h
 $O/processor.o: processor.cc \
