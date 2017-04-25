@@ -23,7 +23,7 @@
 
 #define PacketSize 1000 //Byte为单位
 #define FlitSize 200 //Byte为单位
-#define FlitLength 5 // PacketSize / FlitSize
+#define FlitLength 5 // PacketSize / FlitSize， FlitLength必须大于等于2，否则processor产生的数据包会发生错误
 
 #define VC 3 //virtual channel
 #define BufferDepth 4 * FlitLength //virtual channel buffer depth, 大于等于2，可存放Flit的数量

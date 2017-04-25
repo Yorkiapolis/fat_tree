@@ -17,4 +17,5 @@ message BufferInfoMsg{
 	int from_port; //该msg从Router的哪个端口过来
 	//bool BufferAvail[]; //保存与from_port端口相连的路由器对应端口的buffer状态，可变长度数组
 	int vcid; //from upstream router, decrement credit count
+
 }

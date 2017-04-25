@@ -104,6 +104,9 @@ class Router : public cSimpleModule
     int SAInputWinVcid[PortNum]; //保存胜利的vcid,仲裁失败保存-1，不需要重置
     int SAOutputWin[PortNum]; //保存胜利的input port，仲裁失败保存-1，不需要重置
 
+    //bufferInfoMsg Queue
+    cQueue bufTxQueue[PortNum]; //发送bufferInfoMsg数据队列
+
 
 
 
@@ -365,14 +368,18 @@ void Router::handleMessage(cMessage *msg)
                     InputBuffer[inport][inport_vcid][j] = InputBuffer[inport][inport_vcid][j+1];
                 }
                 InputBuffer[inport][inport_vcid][BufferDepth-1] = nullptr;
-
+                //将数据放到输出buffer
                 OutputBuffer[i][output_vcid] = current_pkt;
 
                 //每转发input buffer里面的一个flit，就产生一个流控信号，通知上游router，进行increment credit操作
+                //先将bufferInfoMsg放入Queue中，由于和Data Pkt共用一个信道，容易发生阻塞，需要队列保存数据
                 int from_port = getNextRouterPort(inport);
                 BufferInfoMsg* bufferInfoMsg = new BufferInfoMsg("bufferInfoMsg");
                 bufferInfoMsg->setFrom_port(from_port);
                 bufferInfoMsg->setVcid(inport_vcid);
+                bufTxQueue[inport].insert(bufferInfoMsg);
+
+
 
                 //判断是否为tail flit，如果是，则重置寄存器状态
                 if(current_pkt->getIsTail() == true) {
@@ -386,12 +393,11 @@ void Router::handleMessage(cMessage *msg)
                     ", INPORT VCID: "<<inport_vcid<<", InputBuffer: { "<< current_pkt << " }" << '\n';
                 }
 
-                //发送bufferInfoMsg
-                forwardBufferInfoMsg(bufferInfoMsg, inport);
+
 
             }
 
-            //Step 6. Forward Message
+            //Step 6. Forward Data Message
             //发送数据，需要检查信道是否空闲以及
             for(int i = 0; i < PortNum; i++) {
                 if(channelAvailTime(i) <= simTime()) {
@@ -415,11 +421,21 @@ void Router::handleMessage(cMessage *msg)
                                 ", OUTPORT VCID: "<<j<<", Forward Pkt: { " <<forward_msg<<" }" <<'\n';
                             }
 
-                            //发送数据
+                            //发送pkt数据
                             forwardMessage(forward_msg, i);
                         }
                     }
                 }
+            }
+
+            //Step 7. Forward bufferInfoMsg Message
+            for(int i = 0; i < PortNum; i++) {
+                if(bufTxQueue[i].isEmpty() || channelAvailTime(i) > simTime()) continue;
+                BufferInfoMsg* bufferInfoMsg = (BufferInfoMsg*) bufTxQueue[i].front();
+                bufTxQueue[i].pop(); //注意，先pop再发送
+                //发送bufferInfoMsg
+                forwardBufferInfoMsg(bufferInfoMsg, i);
+
             }
 
 
