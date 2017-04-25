@@ -10,13 +10,13 @@
 
 
 //网络拓扑参数
-#define PortNum 4
+#define PortNum 16
 #define LevelNum 3
-#define ProcessorNum 16
-#define SwitchNum 20
-#define SwTop 4
-#define SwLower 16
-#define SwLowEach 8
+#define ProcessorNum 1024
+#define SwitchNum 320
+#define SwTop 64
+#define SwLower 256
+#define SwLowEach 128
 
 //#define LinkNum 48 //双向链路乘以2，用于功耗仿真
 //曙光5000相关参数，16端口，3虚通道，MTU 1KB，Buffer 4MTU

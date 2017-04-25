@@ -65,7 +65,6 @@ class Processor : public cSimpleModule
   protected:
     virtual FatTreePkt* generateMessage(bool isHead, bool isTail, int flitCount, int flidID, int vcid);
     virtual void forwardMessage(FatTreePkt *msg);
-    virtual void forwardBufferInfoMsgP(BufferInfoMsg *msg);
     virtual void initialize() override;
     virtual void handleMessage(cMessage *msg) override;
     virtual simtime_t channelAvailTime();
@@ -296,8 +295,11 @@ FatTreePkt* Processor::generateMessage(bool isHead, bool isTail, int flitCount, 
         // Head Flit
 
         // Produce source and destination address
-        int current_ppid=getIndex();
+        int current_ppid = getIndex();
         int n = getVectorSize();//processor的数量
+        if (Verbose >= VERBOSE_DETAIL_DEBUG_MESSAGES) {
+            EV<<"There are "<< n << " processors"<<"\n";
+        }
         //EV<<n<<"\n";
 #ifdef UNIFORM //均匀分布
         int dst_ppid = intuniform(0, n-2); //均匀流量模型
@@ -371,45 +373,37 @@ void Processor::forwardMessage(FatTreePkt *msg)
 
 }
 
-void Processor::forwardBufferInfoMsgP(BufferInfoMsg *msg){
-    send(msg,"port$o");
-    int cur_ppid=getIndex();//当前路由器的id
-    int cur_plid=ppid2plid(cur_ppid);
-    if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
-        EV << "Forwarding BufferInfoMsg { " << msg << " } from processor "<<cur_ppid<<"("<<cur_plid<<")\n";
-    }
-}
 
 int Processor::getNextRouterPortP(){
     int current_ppid=getIndex();
     int plid=ppid2plid(current_ppid);
-    int port=plid%10;
+    int port=plid%100;
     return port; //返回和processor相连的router的端口
 }
 
 
 //从ppid计算plid
 int Processor::ppid2plid(int ppid){
-    int idtmp=ppid;
-    int idfinal=0;
-    int mul=1;
-    for(int i=0;i<LevelNum-1;i++){
-        idfinal=idfinal+idtmp%(PortNum/2)*mul;
-        mul=mul*10;
-        idtmp=(int)(idtmp/(PortNum/2));
+    int idtmp = ppid;
+    int idfinal = 0;
+    int mul = 1;
+    for(int i = 0; i < LevelNum - 1; i++){
+        idfinal = idfinal + idtmp % (PortNum / 2)*mul;
+        mul = mul * 100;
+        idtmp = (int) (idtmp / (PortNum / 2));
     }
-    idfinal=idfinal+idtmp*mul;
+    idfinal = idfinal + idtmp * mul;
     return idfinal;
 }
 //从plid计算ppid
 int Processor::plid2ppid(int plid){
-    int tmp=plid;
-    int mul=1;
-    int IDtmp=0;
-    for(int i=0;i<LevelNum;i++){
-        IDtmp=IDtmp+mul*(tmp%10);
-        mul=mul*(PortNum/2);
-        tmp=tmp/10;
+    int tmp = plid;
+    int mul = 1;
+    int IDtmp = 0;
+    for(int i = 0; i < LevelNum; i++){
+        IDtmp = IDtmp + mul * (tmp % 100);
+        mul = mul * (PortNum / 2);
+        tmp = tmp / 100;
     }
     return IDtmp;
 }

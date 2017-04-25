@@ -38,6 +38,7 @@
  *     int flitCount;//如果为head flit，则该项记录包括head flit在内的flit个数
  *     int src_ppid; //源processor的physical id
  *     int dst_ppid; //目标processor的physical id
+ *     long packageGenTime; //package的产生时间
  * 
  *     //以下为每个flit都具有的信息
  *     bool isHead; //判断是否为head flit
@@ -47,8 +48,6 @@
  *     int hopCount = 0;
  *     int from_router_port; //记录从当前路由器的哪一个端口收到该msg，由上一个路由器计算出
  * 
- *     long packageGenTime; //package的产生时间
- * 	//long flitGenTime; //flit的产生时间
  * 
  * }
  * </pre>
@@ -59,12 +58,12 @@ class FatTreePkt : public ::omnetpp::cPacket
     int flitCount;
     int src_ppid;
     int dst_ppid;
+    long packageGenTime;
     bool isHead;
     bool isTail;
     int vc_id;
     int hopCount;
     int from_router_port;
-    long packageGenTime;
 
   private:
     void copy(const FatTreePkt& other);
@@ -89,6 +88,8 @@ class FatTreePkt : public ::omnetpp::cPacket
     virtual void setSrc_ppid(int src_ppid);
     virtual int getDst_ppid() const;
     virtual void setDst_ppid(int dst_ppid);
+    virtual long getPackageGenTime() const;
+    virtual void setPackageGenTime(long packageGenTime);
     virtual bool getIsHead() const;
     virtual void setIsHead(bool isHead);
     virtual bool getIsTail() const;
@@ -99,8 +100,6 @@ class FatTreePkt : public ::omnetpp::cPacket
     virtual void setHopCount(int hopCount);
     virtual int getFrom_router_port() const;
     virtual void setFrom_router_port(int from_router_port);
-    virtual long getPackageGenTime() const;
-    virtual void setPackageGenTime(long packageGenTime);
 };
 
 inline void doParsimPacking(omnetpp::cCommBuffer *b, const FatTreePkt& obj) {obj.parsimPack(b);}
