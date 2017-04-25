@@ -57,10 +57,6 @@ class Processor : public cSimpleModule
 
     int BufferConnectCredit[VC]; //连接Processor端口的Router的buffer的credit
 
-    //int FlitCir; //用来循环产生Head Flit和Body Flit
-    //int curFlitLength; //不定长package的Flit长度
-    //int preHeadFlitVCID; //用来存放上一个产生的Head Flit的VCID
-    //FatTreeMsg* OutBuffer[FixedFlitLength]; //一个package的大小，用于存放flit，有可能产生body flit时，下个router的buffer已满，因此需要缓冲一下
     cQueue txQueue; //发送数据队列
 
   public:
@@ -115,8 +111,6 @@ void Processor::initialize()
     //WATCH(numReceived);
     //WATCH(numPktDropped);
 
-    //hopCountStats.setName("hopCountStats");
-    //hopCountStats.setRangeAutoUpper(0, 10, 1.5);
     hopCountVector.setName("HopCount");
     flitDelayTime.setName("flitDelayTime");
     packageDelayTime.setName("packageDelayTime");
@@ -130,12 +124,6 @@ void Processor::initialize()
         BufferConnectCredit[i] = BufferDepth; //初始化与它相连的router的buffer都为空
     }
 
-    //FlitCir = 0; //从0开始循环
-    //curFlitLength = FixedFlitLength;
-    //preHeadFlitVCID = 0;
-
-//    for(int i=0;i<FixedFlitLength;i++)
-//        OutBuffer[i]=nullptr;
 
     dropFlag = false;
 

@@ -19,6 +19,7 @@ packet FatTreePkt{
 	int flitCount;//如果为head flit，则该项记录包括head flit在内的flit个数
 	int src_ppid; //源processor的physical id
 	int dst_ppid; //目标processor的physical id
+	long packageGenTime; //package的产生时间
        
     //以下为每个flit都具有的信息
 	bool isHead; //判断是否为head flit
@@ -28,7 +29,5 @@ packet FatTreePkt{
 	int hopCount = 0;
 	int from_router_port; //记录从当前路由器的哪一个端口收到该msg，由上一个路由器计算出
 	
-	long packageGenTime; //package的产生时间
-	//long flitGenTime; //flit的产生时间
-    
+	
 }

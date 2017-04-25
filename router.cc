@@ -68,17 +68,9 @@ using namespace omnetpp;
 class Router : public cSimpleModule
 {
   private:
-    //long numSent;
-    //long numReceived;
     cMessage* selfMsgAlloc; //message仲裁定时信号
-    //cMessage *selfMsgBufferInfo; //buffer通知定时信号
-
-    //cLongHistogram hopCountStats;
-    //cOutVector hopCountVector;
 
     //每个Port的buffer状态
-    //bool BufferAvailCurrent[PortNum][VC];//当前路由器的buffer状态
-    //bool BufferAvailConnect[PortNum][VC];//相连路由器对应端口号的下一跳路由器buffer状态
     int BufferConnectCredit[PortNum][VC]; //连接路由器端口的buffer的credit，即空闲缓存大小
 
     //Step 1. Input Buffer
@@ -86,13 +78,9 @@ class Router : public cSimpleModule
     FatTreePkt* InputBuffer[PortNum][VC][BufferDepth]; //输入端口virtual channel的buffer,里面存放收到的Flit信息
     FatTreePkt* OutputBuffer[PortNum][VC]; //输出端口的virtual channel的buffer，深度为1
 
-    //看看能否删除
-    //int InputVCFlitCount[PortNum][VC]; //输入端口每个虚通道队投packet的剩余flit
-
     //Step 2. Routing Logic
     int RCInputVCState[PortNum][VC]; //-1代表没有分配结果，即对应的vc没有数据，否则表示被分配的output vc标号，port_number * vc + vc_id
     //越早到的数据放在ID小的那边，规定好,0表示buffer中第一个出去的数据
-    //int VCOutPort[PortNum][VC][BufferDepth]; //对应VChannelMsg，存放该msg的输出端口号out_port_id
 
     //Step 3. Virtual Channel Allocation
     int VAOutputVCState[PortNum][VC]; //-1代表output vc闲置，否则表示被分配的input vc标号，port_number * vc + vc_id，输出端口vc被锁住后，下一跳的输入端口对应的vc就被锁住
@@ -107,35 +95,8 @@ class Router : public cSimpleModule
     //bufferInfoMsg Queue
     cQueue bufTxQueue[PortNum]; //发送bufferInfoMsg数据队列
 
-
-
-
-
-
-//    int VCInportVCID[PortNum]; //存放每个端口进入的Flit的VCID，VCID由Head Flit确定
-//    //int VCOutport[PortNum][VC]; //存放每个输入端口的Virtual Channel的进入Crossbar的flit的输出端口
-//    int VCInportFlitCount[PortNum]; //存放每个输入端口Head Flit的Flit Count，用于计数，0表示剩余的flit为0个，已传完
-//
-//
-//
-//
-//    //用于VC仲裁
-//    int VCAllocWinVCID[PortNum];//存放每个port胜利的VChannelMsg的id号
-//    //FatTreeMsg* VCAllocWinMsg[PortNum];//用来存储每个port胜利的VChannelMsg的msg，注意，存在VChannelMsg的msg先不删，最后发出去了再删
-//    int VCAllocWinOutPort[PortNum];//用来存储每个port胜利的vc的msg的输出port
-//    int VCAllocWinFlitCount[PortNum];//用于存储每个Port胜利的VC的Flit Count
-//
-//    //用于SA仲裁
-//    //FatTreeMsg* SAllocWinMsg[PortNum];//存储每个输出端口Switch Allocator仲裁中胜出输入端口号里的msg，PortNum个输出端口需要PortNum个仲裁
-//    int SAllocWinInPort[PortNum];//存储每个输出端口Switch Allocator仲裁中胜出输入端口号，看清楚，输入端口号，不是VC中胜出的vcid
-//    int SAllocFlitCount[PortNum];//存放输出端口一个packge的flit count，同时用于判断输出端口是否被占用
-//    int SAllocNextVCID[PortNum];//存放输出端口要输出Flit的下一个Router的VCID
-
     double RouterPower;
     double flitReceived; //用于计算toggle rate
-
-
-
 
 
   public:
@@ -166,13 +127,11 @@ Define_Module(Router);
 
 Router::Router(){
     selfMsgAlloc=nullptr;
-    //selfMsgBufferInfo=nullptr;
 }
 
 
 Router::~Router(){
     cancelAndDelete(selfMsgAlloc);
-    //cancelAndDelete(selfMsgBufferInfo);
 }
 
 void Router::initialize()
@@ -197,30 +156,6 @@ void Router::initialize()
         }
     }
 
-
-//    for(int i=0;i<PortNum;i++){
-//        VCInportVCID[i]=-1;
-//        VCInportFlitCount[i]=0;
-//        //for(int j=0;j<VC;j++){
-//        //    VCOutport[i][j]=-1;
-//        //}
-//    }
-//
-//    //对VC仲裁器进行初始化
-//    for(int i=0;i<PortNum;i++){
-//        VCAllocWinVCID[i]=-1;
-//        //VCAllocWinMsg[i]=nullptr;
-//        VCAllocWinOutPort[i]=-1;
-//        VCAllocWinFlitCount[i]=0;
-//    }
-//
-//    //对SA仲裁器进行初始化
-//    for(int i=0;i<PortNum;i++){
-//        //SAllocWinMsg[i]=nullptr;
-//        SAllocWinInPort[i]=-1;
-//        SAllocFlitCount[i]=0;
-//        SAllocNextVCID[i]=-1;
-//    }
 
     //对selfMsg进行初始化
     selfMsgAlloc = new cMessage("selfMsgAlloc");
@@ -438,152 +373,6 @@ void Router::handleMessage(cMessage *msg)
 
             }
 
-
-
-
-
-
-
-
-//            //***********************************************************************************************************
-//
-//
-//            // Step 3 虚通道仲裁 Virtual Channel Allocation
-//            //虚通道仲裁采用Round Robin轮循调度算法
-//            //采用VCAllocWinVCID来轮流指向VC个虚通道
-//            //对每个端口都进行判决
-//            for(int i=0;i<PortNum;i++){
-//                //如果上一次仲裁胜利的Virtual Channel的Flit还没传输完，即VCAllocWinFlitCount不为0，那么跳过本次仲裁，沿用上一次仲裁结果
-//                if(VCAllocWinFlitCount[i] == 0){
-//                    int vcid=(VCAllocWinVCID[i]+1)%VC;//port i的VChannelMsg指针，从上一次仲裁成功的vcid的下一个vcid开始
-//                    for(int j=0;j<VC;j++){
-//                        int vcid_tmp=(vcid+j)%VC;
-//                        if(InputBuffer[i][vcid_tmp][0]!=nullptr){ //一定是Head Flit，如果不考虑丢包的话
-//                            if(InputBuffer[i][vcid_tmp][0]->getIsHead() == true){
-//                                //VCAllocWinMsg[i]=InputBuffer[i][vcid_tmp][0];//先存着不删除，发出去后再删
-//                                VCAllocWinVCID[i]=vcid_tmp;//存着仲裁胜利的vcid
-//
-//                                // Step 2 路由计算 Routing Computation, 在VC仲裁胜利后再做路由计算，节省存储资源
-//                                // 如果flit一进入vc就进行路由计算，那1个vc里面如果有多个packet，那么就需要多个寄存器
-//                                // 来保存路由计算的结果；相反，如果在vc的出口进行路由计算，那么只需要1个寄存器就能保存结果；
-//                                // 如果虚通道的数量根据输出端口来确定，每个虚通道对应输出的端口号，那么需要一进入就进行路由计算，
-//                                // 确定输出端口号
-//                                VCAllocWinOutPort[i]=calRoutePort(InputBuffer[i][vcid_tmp][0]);//存储胜利的vc的msg的输出端口
-//                                VCAllocWinFlitCount[i]=InputBuffer[i][vcid_tmp][0]->getFlitCount();//取得Flit Count
-//                                if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
-//                                    EV<<"VC Allocation >> ROUTER: "<<getIndex()<<"("<<swpid2swlid(getIndex())<<"), INPORT: "<<i<<
-//                                            ", VCAllocWinVCID: "<<vcid_tmp<<", VCAllocWinOutPort: "<<VCAllocWinOutPort[i]<<
-//                                            ", Flit Count: "<<VCAllocWinFlitCount[i]<<", Win Msg: { "<<InputBuffer[i][vcid_tmp][0]<<" }\n";
-//                                }
-//                                break;
-//                            }
-//
-//                        }
-//                    }
-//                }
-//            }
-//
-//
-//
-//
-//            //Step 4 交叉开关仲裁 Switch Allocation
-//            //第二阶段的仲裁主要是对从每个输入端口过来并对同一输出端口提出的请求进行仲裁。
-//            //当然这些请求都是由输入端某一胜出的虚拟通道发出的。因为有P个输入端口，所以这样的仲裁需要P个输入。
-//            //这里不用crossbar来实现，用for循环代替crossbar
-//            for(int i=0;i<PortNum;i++){//对每一个输出端口SAlloc进行循环
-//                if(SAllocFlitCount[i] == 0){//输出端口还未被占用
-//                    int last_win_inport=(SAllocWinInPort[i]+1)%PortNum;//从上一次仲裁胜利的端口的下一个端口开始进行轮循仲裁
-//                    for(int j=0;j<PortNum;j++){//PortNum个输入端口
-//                        int inport_tmp=(last_win_inport+j)%PortNum;
-//                        if(VCAllocWinOutPort[inport_tmp] == i
-//                                && InputBuffer[inport_tmp][VCAllocWinVCID[inport_tmp]][0] != nullptr){
-//                            //如果inport仲裁胜出的vc的输出port和outport的id一致，则仲裁胜出,同时需要判断VCAllocWinOutPort存的是
-//                            //上一次仲裁胜利的package还是本次仲裁胜利的package，如果为上一次，那VCMsgBuffer对应的buffer为nullptr，跳过这个端口
-//
-//                            int vc_id=getNextRouterAvailVCID(i);//返回下一跳路由器有buffer的vcid，否则返回-1
-//                            if(vc_id != -1){ //下个router相应端口的vc还有buffer的情况下
-//                                //SAllocWinMsg[i]=VCAllocWinMsg[inport_tmp];
-//                                InputBuffer[inport_tmp][VCAllocWinVCID[inport_tmp]][0]->setVc_id(vc_id);//设置下一个节点的vcid
-//                                SAllocNextVCID[i] = vc_id;
-//                                SAllocWinInPort[i]=inport_tmp;
-//                                SAllocFlitCount[i]=VCAllocWinFlitCount[inport_tmp];
-//                                if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
-//                                    EV<<"Switch Allocation >> ROUTER: "<<getIndex()<<"("<<swpid2swlid(getIndex())<<"), OUTPORT: "<<i<<
-//                                            ", SAllocWinInPort: "<<inport_tmp<<", VCAllocWinVCID: "<<VCAllocWinVCID[inport_tmp]<<
-//                                            ", SAllocNextVCID: "<<SAllocNextVCID[i]<<", SAllocFlitCount: "<<SAllocFlitCount[i]<<
-//                                            ", SAlloc Win Msg: { "<<InputBuffer[inport_tmp][VCAllocWinVCID[inport_tmp]][0]<<" }\n";
-//                                }
-//                                break;//break跳出循环
-//                            }
-//
-//                        }
-//                    }
-//                }
-//            }
-//
-//
-//
-//            //Step 5 交叉开关传输 Switch Traversal
-//            //对每一个输出端口都转发出msg，同时对存有已转发的msg进行清空
-//            for(int i=0;i<PortNum;i++){//对每一个输出端口进行转发
-//                if(SAllocFlitCount[i] != 0){//输出端口有数据
-//                    //先判断下一个Router对应端口对应vc是否有buffer，多个flit一起发时，有可能前面几个flit用完了buffer
-//                    int input_port = SAllocWinInPort[i];
-//                    int win_vcid = VCAllocWinVCID[input_port];
-//                    int nextVCID = SAllocNextVCID[i];
-//                    //判断下个路由器是否有空间接受此Flit
-//                    if(BufferConnectCredit[i][nextVCID] != 0){
-//                        FatTreeMsg* forward_msg=InputBuffer[input_port][win_vcid][0];
-//                        int outport = VCAllocWinOutPort[input_port]; //output应该等于i
-//                        if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
-//                            EV<<"Switch Traversal >> ROUTER: "<<getIndex()<<"("<<swpid2swlid(getIndex())<<"), OUTPORT: "<<i<<
-//                                    ", SAllocWinInPort: "<<input_port<<", VCAllocWinVCID: "<<win_vcid<<
-//                                    ", nextVCID: "<<nextVCID<<", SAllocFlitCount: "<<SAllocFlitCount[i]<<
-//                                    ", InputBuffer: { "
-//                                    <<forward_msg<<" }, VCAllocWinOutPort: "<<outport<<'\n';
-//                        }
-//                        //转发msg
-//                        forwardMessage(forward_msg,outport); //由于router不会sink message, 直接转发即可
-//
-//                        //清除相应buffer
-//                        //SAllocWinMsg[i]=nullptr;
-//                        //VCAllocWinMsg[inport]=nullptr;
-//
-//                        //更新寄存器信息
-//                        VCAllocWinFlitCount[input_port]--;
-//                        SAllocFlitCount[i]--;
-//
-//                        //对输入缓存Buffer进行shift
-//                        for(int j=0;j<BufferDepth-1;j++){
-//                            InputBuffer[input_port][win_vcid][j]=InputBuffer[input_port][win_vcid][j+1];
-//                            //VCOutPort[inport][vcid][j]=VCOutPort[inport][vcid][j+1];
-//                        }
-//                        InputBuffer[input_port][win_vcid][BufferDepth-1]=nullptr;
-//                        //VCOutPort[inport][vcid][BufferDepth-1]=-1;
-//
-//                        //判断路由器是否和processor相连，如果相连则不需要decrement credit，因为processor的接受能力是无限的
-//                        if(!connectToProcessor(outport)){ //与路由器相连
-//                            BufferConnectCredit[i][nextVCID]--;
-//                        }
-//                        if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
-//                            EV<<"BufferConnectCredit["<<i<<"]["<<nextVCID<<"]="<<BufferConnectCredit[i][nextVCID]<<"\n";
-//                        }
-//
-//
-//                        //每转发input buffer里面的一个flit，就产生一个流控信号，通知上游router，进行increment credit操作
-//                        int from_port = getNextRouterPort(input_port);
-//                        BufferInfoMsg *bufferInfoMsg = new BufferInfoMsg("bufferInfoMsg");
-//                        bufferInfoMsg->setFrom_port(from_port);
-//                        bufferInfoMsg->setVcid(win_vcid);
-//                        //发送bufferInfoMsg
-//                        forwardBufferInfoMsg(bufferInfoMsg, input_port);
-//
-//                    }
-//
-//                }
-//
-//            }
-
         } // end of selfMsgAlloc
 
     } // end of selfMsg
@@ -626,64 +415,6 @@ void Router::handleMessage(cMessage *msg)
                 EV<<"Step 1. Input Buffer >> ROUTER: "<<getIndex()<<"("<<swpid2swlid(getIndex())<<"), INPORT: "<<input_port<<
                     ", VCID: "<<vc_id<<", Received MSG: { "<<ftmsg<<" }\n";
             }
-
-
-//            //判断是否为Head Flit
-//            if(ftmsg->getIsHead() == true){
-//                int input_port = ftmsg->getFrom_router_port();
-//                int vc_id = ftmsg->getVc_id();
-//                int flit_count = ftmsg->getFlitCount();
-//                VCInportVCID[input_port] = vc_id;
-//                VCInportFlitCount[input_port] = flit_count -1; //减去Head Flit，剩余的个数
-//                if(InputBuffer[input_port][vc_id][BufferDepth-1]==nullptr){
-//                    for(int i=0;i<BufferDepth;i++){
-//                        if(InputBuffer[input_port][vc_id][i]==nullptr){
-//                            InputBuffer[input_port][vc_id][i]=ftmsg;
-//                            break;
-//                        }
-//                    }
-//                    if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
-//                        EV<<"Input Buffer >> ROUTER: "<<getIndex()<<"("<<swpid2swlid(getIndex())<<"), INPORT: "<<input_port<<
-//                            ", VCID: "<<vc_id<<", Remaining Flit Count: "<<VCInportFlitCount[input_port]<<
-//                            ", Received MSG: { "<<ftmsg<<" }\n";
-//                    }
-//                }else{
-//                    //由于上一跳的router在往该router转发flit时已经确定有buffer，因此不会进入到下面这种情况
-//                    if (Verbose >= VERBOSE_DEBUG_MESSAGES){
-//                        EV<<"Input Buffer and Routing >> ROUTER: "<<getIndex()<<"("<<swpid2swlid(getIndex())<<"), INPORT: "<<input_port<<
-//                            ", VCID: "<<vc_id<<", Received Head MSG: { "<<ftmsg<<" }, Buffer is full, dropping message\n";
-//                    }
-//
-//                }
-//
-//            }else{ //Body/Tail Flit
-//                int input_port = ftmsg->getFrom_router_port();
-//                int vc_id = VCInportVCID[input_port];
-//                VCInportFlitCount[input_port]--;
-//
-//                if(InputBuffer[input_port][vc_id][BufferDepth-1]==nullptr){
-//                    for(int i=0;i<BufferDepth;i++){
-//                        if(InputBuffer[input_port][vc_id][i]==nullptr){
-//                            InputBuffer[input_port][vc_id][i]=ftmsg;
-//                            break;
-//                        }
-//                    }
-//                    if (Verbose >= VERBOSE_DEBUG_MESSAGES) {
-//                        EV<<"Input Buffer >> ROUTER: "<<getIndex()<<"("<<swpid2swlid(getIndex())<<"), INPORT: "<<input_port<<
-//                            ", VCID: "<<vc_id<<", Remaining Flit Count: "<<VCInportFlitCount[input_port]<<
-//                            ", Received MSG: { "<<ftmsg<<" }\n";
-//                    }
-//                }else{
-//                    //由于上一跳的router在往该router转发flit时已经确定有buffer，因此不会进入到下面这种情况
-//                    if (Verbose >= VERBOSE_DEBUG_MESSAGES){
-//                        EV<<"Input Buffer and Routing >> ROUTER: "<<getIndex()<<"("<<swpid2swlid(getIndex())<<"), INPORT: "<<input_port<<
-//                            ", VCID: "<<vc_id<<", Received Body/Tail MSG: { "<<ftmsg<<" }, Buffer is full, dropping message\n";
-//                    }
-//
-//                }
-//
-//
-//            }
 
         }//end of FatTreePkt
 
@@ -979,10 +710,6 @@ void Router::finish()
     //EV << "Hop count, mean:   " << hopCountStats.getMean() << endl;
     //EV << "Hop count, stddev: " << hopCountStats.getStddev() << endl;
 
-    //recordScalar("#sent", numSent);
-    //recordScalar("#received", numReceived);
-
-    //hopCountStats.recordAs("hop count");
     double routerPower = getRouterPower();
     EV <<"Router power: " << routerPower <<endl;
     recordScalar("router power", routerPower);
